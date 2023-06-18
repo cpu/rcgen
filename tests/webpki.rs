@@ -1,6 +1,7 @@
 #[cfg(feature = "x509-parser")]
 use rcgen::{CertificateSigningRequest, DnValue};
 use rcgen::{BasicConstraints, Certificate, CertificateParams, DnType, IsCa, KeyPair, RemoteKeyPair};
+
 use webpki::{EndEntityCert, TlsServerTrustAnchors, TrustAnchor};
 use webpki::SignatureAlgorithm;
 use webpki::{Time, DnsNameRef};
@@ -65,8 +66,8 @@ fn check_cert_ca<'a, 'b>(cert_der :&[u8], cert :&'a Certificate, ca_der :&[u8],
 
 	// (2/3) Check that the cert is valid for the given DNS name
 	let dns_name = DnsNameRef::try_from_ascii_str("crabs.crabs").unwrap();
-	end_entity_cert.verify_is_valid_for_dns_name(
-		dns_name,
+	end_entity_cert.verify_is_valid_for_subject_name(
+		webpki::SubjectNameRef::from(dns_name),
 	).expect("valid for DNS name");
 
 	// (3/3) Check that a message signed by the cert is valid.
@@ -419,4 +420,28 @@ fn test_webpki_serial_number() {
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg,
 		&signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(&cert_der, &cert, &webpki::ECDSA_P256_SHA256, sign_fn);
+}
+
+#[test]
+fn test_webpki_crl_parse() {
+	// Create a CRL with one revoked cert, and an issuer to sign the CRL.
+	let (crl, issuer) = util::test_crl();
+	let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
+
+	// Serialize the CRL signed by the issuer to DER.
+	let der = crl.serialize_der_with_signer(&issuer).unwrap();
+
+	// We should be able to parse the CRL DER without error.
+	let webpki_crl = webpki::CertRevocationList::from_der(&der)
+		.expect("failed to parse CRL DER");
+
+	// TODO(@cpu): use crl.get_params().crl_number with padding stripped.
+	assert_eq!(webpki_crl.crl_number.unwrap(),  &[4, 210]);
+	// TODO(@cpu): assert next update/this update.
+
+	let webpki_revoked_cert = webpki_crl.into_iter().next().unwrap().unwrap();
+	// TODO(@cpu): use revoked_cert.serial_number.as_ref() with padding stripped.
+	assert_eq!(webpki_revoked_cert.serial_number, &[39, 15]);
+	assert_eq!(webpki_revoked_cert.reason_code.unwrap() as u64, revoked_cert.reason_code.unwrap() as u64);
+	// TODO(@cpu): assert invalidity date, revocation date.
 }
