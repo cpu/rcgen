@@ -124,3 +124,26 @@ mod test_x509_parser_crl {
 		assert!(x509_crl.verify_signature(&x509_issuer.public_key()).is_ok());
 	}
 }
+
+#[cfg(feature = "x509-parser")]
+mod test_parse_crl_dps {
+	use crate::util;
+
+	#[test]
+	fn parse_crl_dps() {
+		// Generate and parse a certificate that includes two CRL distribution points.
+		let der = util::cert_with_crl_dps();
+		let (_, parsed_cert) = x509_parser::parse_x509_certificate(&der).unwrap();
+
+		// We should find a CRL DP extension was parsed.
+		let crl_dps = parsed_cert.get_extension_unique(&x509_parser::oid_registry::OID_X509_EXT_CRL_DISTRIBUTION_POINTS)
+			.expect("malformed CRL distribution points extension")
+			.expect("missing CRL distribution points extension");
+
+		// The extension should not be critical.
+		assert!(!crl_dps.critical);
+
+		// TODO(XXX): x509-parser does not parse this extension yet, limiting what we can test from
+		// 	here. See `openssl.rs` for more thorough coverage.
+	}
+}
