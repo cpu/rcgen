@@ -109,9 +109,16 @@ mod test_x509_parser_crl {
 				   crl.get_params().this_update.unix_timestamp());
 		assert_eq!(x509_crl.next_update().unwrap().to_datetime().unix_timestamp(),
 				   crl.get_params().next_update.unix_timestamp());
-		// TODO(XXX): Waiting on https://github.com/rusticata/x509-parser/pull/144
+		// TODO(XXX): Waiting on x509-parser 0.15.1 to be released.
 		// let crl_number = BigUint::from_bytes_be(crl.get_params().crl_number.as_ref());
 		// assert_eq!(x509_crl.crl_number().unwrap(), &crl_number);
+
+		// The issuing distribution point extension should be present and marked critical.
+		let issuing_dp_ext = x509_crl.extensions().iter()
+			.find(|ext| ext.oid == x509_parser::oid_registry::OID_X509_EXT_ISSUER_DISTRIBUTION_POINT)
+			.expect("failed to find issuing distribution point extension");
+		assert!(issuing_dp_ext.critical);
+		// TODO(XXX): x509-parser does not yet parse the CRL issuing DP extension for further examination.
 
 		// We should find the expected revoked certificate serial with the correct reason code.
 		let x509_revoked_cert = x509_crl.iter_revoked_certificates().next()
