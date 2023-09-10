@@ -981,20 +981,6 @@ impl CertificateParams {
 							ext.write_der(writer.next());
 						}
 
-						if !self.crl_distribution_points.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								OID_CRL_DISTRIBUTION_POINTS,
-								false,
-								|writer| {
-									writer.write_sequence(|writer| {
-										for distribution_point in &self.crl_distribution_points {
-											distribution_point.write_der(writer.next());
-										}
-									})
-								},
-							);
-						}
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
 								// Write subject_key_identifier
@@ -1130,7 +1116,10 @@ impl CertificateParams {
 			}
 		}
 
-		// TODO: crl distribution points.
+		if !self.crl_distribution_points.is_empty() {
+			exts.add_extension(ext::crl_distribution_points(&self.crl_distribution_points))?;
+		}
+
 		// TODO: basic constraints.
 		// TODO: subject key identifier.
 		// TODO: custom extensions
