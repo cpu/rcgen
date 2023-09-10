@@ -243,19 +243,8 @@ impl CertificateRevocationListParams {
 			// RFC 5280 §5.1.2.7:
 			//   This field may only appear if the version is 2 (Section 5.1.2.1).  If
 			//   present, this field is a sequence of one or more CRL extensions.
-			// RFC 5280 §5.2:
-			//   Conforming CRL issuers are REQUIRED to include the authority key
-			//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
-			//   extensions in all CRLs issued.
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				writer.write_sequence(|writer| {
-					// TODO: have the Extensions type write the outer sequence and each
-					// 		 contained extension once we've ported each of the below
-					//       extensions to self.extensions().
-					for ext in self.extensions(ca).iter() {
-						ext.write_der(writer.next());
-					}
-				});
+				self.extensions(ca).write_der(writer);
 			});
 
 			Ok(())
