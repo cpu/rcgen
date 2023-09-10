@@ -77,6 +77,9 @@ impl CertificateSigningRequest {
 								.push(SanType::try_from_general(name)?);
 						}
 					},
+					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+						params.key_identifier = ski.0.to_vec();
+					},
 					_ => return Err(RcgenError::UnsupportedExtension),
 				}
 			}
