@@ -7,14 +7,15 @@ use yasna::{DERWriter, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{
 	OID_AUTHORITY_KEY_IDENTIFIER, OID_BASIC_CONSTRAINTS, OID_CRL_DISTRIBUTION_POINTS,
-	OID_CRL_ISSUING_DISTRIBUTION_POINT, OID_CRL_NUMBER, OID_EXT_KEY_USAGE, OID_KEY_USAGE,
-	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
+	OID_CRL_ISSUING_DISTRIBUTION_POINT, OID_CRL_NUMBER, OID_CRL_REASONS, OID_EXT_KEY_USAGE,
+	OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::RcgenError;
 use crate::{
 	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
 	CrlDistributionPoint, CrlIssuingDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose,
-	GeneralSubtree, IsCa, KeyUsagePurpose, NameConstraints, SanType, SerialNumber,
+	GeneralSubtree, IsCa, KeyUsagePurpose, NameConstraints, RevocationReason, SanType,
+	SerialNumber,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -391,6 +392,33 @@ pub(crate) fn issuing_distribution_point(
 		criticality: Criticality::Critical,
 		der_value: yasna::construct_der(|writer| {
 			distribution_point.write_der(writer);
+		}),
+	}
+}
+
+/// An X.509v3 reason code extension according to
+/// [RFC 5280 5.3.1](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.1).
+pub(crate) fn reason_code(code: RevocationReason) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_CRL_REASONS),
+		// The reasonCode is a non-critical CRL entry extension
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+			   CRLReason ::= ENUMERATED {
+				   unspecified             (0),
+				   keyCompromise           (1),
+				   cACompromise            (2),
+				   affiliationChanged      (3),
+				   superseded              (4),
+				   cessationOfOperation    (5),
+				   certificateHold         (6),
+						-- value 7 is not used
+				   removeFromCRL           (8),
+				   privilegeWithdrawn      (9),
+				   aACompromise           (10) }
+			*/
+			writer.write_enum(code as i64);
 		}),
 	}
 }
