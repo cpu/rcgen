@@ -82,6 +82,14 @@ impl Extensions {
 		Ok(())
 	}
 
+	pub(crate) fn write_der(&self, writer: DERWriter) {
+		writer.write_sequence(|writer| {
+			for extension in self.0.values() {
+				extension.write_der(writer.next());
+			}
+		})
+	}
+
 	pub(crate) fn iter(self: &Self) -> impl Iterator<Item = &Extension> {
 		self.0.values()
 	}
