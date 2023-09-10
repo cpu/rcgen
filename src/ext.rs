@@ -1,21 +1,23 @@
 use std::collections::BTreeMap;
 use std::net::IpAddr;
 
+use time::OffsetDateTime;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::key_pair::PublicKeyData;
 use crate::oid::{
 	OID_AUTHORITY_KEY_IDENTIFIER, OID_BASIC_CONSTRAINTS, OID_CRL_DISTRIBUTION_POINTS,
-	OID_CRL_ISSUING_DISTRIBUTION_POINT, OID_CRL_NUMBER, OID_CRL_REASONS, OID_EXT_KEY_USAGE,
-	OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
+	OID_CRL_INVALIDITY_DATE, OID_CRL_ISSUING_DISTRIBUTION_POINT, OID_CRL_NUMBER, OID_CRL_REASONS,
+	OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
+	OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::RcgenError;
 use crate::{
-	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
-	CrlDistributionPoint, CrlIssuingDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose,
-	GeneralSubtree, IsCa, KeyUsagePurpose, NameConstraints, RevocationReason, SanType,
-	SerialNumber,
+	write_distinguished_name, write_dt_utc_or_generalized, BasicConstraints, Certificate,
+	CertificateParams, CrlDistributionPoint, CrlIssuingDistributionPoint, CustomExtension,
+	ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose, NameConstraints,
+	RevocationReason, SanType, SerialNumber,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -419,6 +421,20 @@ pub(crate) fn reason_code(code: RevocationReason) -> Extension {
 				   aACompromise           (10) }
 			*/
 			writer.write_enum(code as i64);
+		}),
+	}
+}
+
+/// An X.509v3 invalidity date extension according to
+/// [RFC 5280 5.3.2](https://www.rfc-editor.org/rfc/rfc5280#section-5.3.2).
+pub(crate) fn invalidity_date(date: OffsetDateTime) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_CRL_INVALIDITY_DATE),
+		// The invalidity date is a non-critical CRL entry extension
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			// InvalidityDate ::=  GeneralizedTime
+			write_dt_utc_or_generalized(writer, date);
 		}),
 	}
 }
