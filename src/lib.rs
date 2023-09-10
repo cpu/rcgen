@@ -539,10 +539,14 @@ pub struct CertificateParams {
 	pub key_pair: Option<KeyPair>,
 	/// If `true`, the 'Authority Key Identifier' extension will be added to the generated cert
 	pub use_authority_key_identifier_extension: bool,
-	/// Method to generate key identifiers from public keys
+	/// Method to generate key identifiers from public keys if an explicit key identifier is
+	/// not provided.
 	///
 	/// Defaults to SHA-256.
 	pub key_identifier_method: KeyIdMethod,
+	/// Optional identifier to use for the subject key identifier (SKI) extension. If empty,
+	/// a SKI value will be generated using the [CertificateParams::key_identifier_method].
+	pub key_identifier: Vec<u8>,
 }
 
 impl Default for CertificateParams {
@@ -568,6 +572,7 @@ impl Default for CertificateParams {
 			key_pair: None,
 			use_authority_key_identifier_extension: false,
 			key_identifier_method: KeyIdMethod::Sha256,
+			key_identifier: Vec::new(),
 		}
 	}
 }
@@ -837,14 +842,18 @@ impl CertificateParams {
 			key_pair,
 			use_authority_key_identifier_extension,
 			key_identifier_method,
+			key_identifier,
 		} = self;
 		// - alg and key_pair will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
-		// - There might be a use case for specifying the key identifier
-		// in the CSR, but in the current API it can't be distinguished
-		// from the defaults so this is left for a later version if
-		// needed.
-		let _ = (alg, key_pair, not_before, not_after, key_identifier_method);
+		let _ = (
+			alg,
+			key_pair,
+			not_before,
+			not_after,
+			key_identifier_method,
+			key_identifier,
+		);
 		if serial_number.is_some()
 			|| *is_ca != IsCa::NoCa
 			|| !key_usages.is_empty()
@@ -894,7 +903,7 @@ impl CertificateParams {
 			// Write extensions
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
-				let extensions = self.extensions(None)?;
+				let extensions = self.extensions(None, pub_key)?;
 				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
@@ -962,7 +971,7 @@ impl CertificateParams {
 			// Write subjectPublicKeyInfo
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
-			let extensions = self.extensions(Some(ca))?;
+			let extensions = self.extensions(Some(ca), pub_key)?;
 			let should_write_exts = self.use_authority_key_identifier_extension
 				|| !self.subject_alt_names.is_empty()
 				|| !self.extended_key_usages.is_empty()
@@ -982,16 +991,6 @@ impl CertificateParams {
 
 						match self.is_ca {
 							IsCa::Ca(ref constraint) => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									OID_SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
-									},
-								);
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
@@ -1011,16 +1010,6 @@ impl CertificateParams {
 								);
 							},
 							IsCa::ExplicitNoCa => {
-								// Write subject_key_identifier
-								write_x509_extension(
-									writer.next(),
-									OID_SUBJECT_KEY_IDENTIFIER,
-									false,
-									|writer| {
-										let key_identifier = self.key_identifier(pub_key);
-										writer.write_bytes(key_identifier.as_ref());
-									},
-								);
 								// Write basic_constraints
 								write_x509_extension(
 									writer.next(),
@@ -1086,11 +1075,16 @@ impl CertificateParams {
 		})
 	}
 	/// Returns the X.509 extensions that the [CertificateParams] describe, or an [Error]
-	/// if the described extensions are invalid.
+	/// if the described extensions are invalid. The returned extensions will include a subject
+	/// public key identifier extension for the provided [PublicKeyData].
 	///
 	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
 	/// be included (e.g. the authority key identifier).
-	fn extensions(&self, issuer: Option<&Certificate>) -> Result<Extensions, Error> {
+	fn extensions<K: PublicKeyData>(
+		&self,
+		issuer: Option<&Certificate>,
+		pub_key: &K,
+	) -> Result<Extensions, Error> {
 		let mut exts = Extensions::default();
 
 		if let Some(issuer) = issuer {
@@ -1119,8 +1113,9 @@ impl CertificateParams {
 			exts.add_extension(ext::crl_distribution_points(&self.crl_distribution_points))?;
 		}
 
+		exts.add_extension(ext::subject_key_identifier(&self, pub_key))?;
+
 		// TODO: basic constraints.
-		// TODO: subject key identifier.
 		// TODO: custom extensions
 
 		Ok(exts)
@@ -1418,7 +1413,10 @@ impl Certificate {
 	/// Calculates a subject key identifier for the certificate subject's public key.
 	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
 	pub fn get_key_identifier(&self) -> Vec<u8> {
-		self.params.key_identifier(&self.key_pair)
+		match self.params.key_identifier.is_empty() {
+			true => self.params.key_identifier(&self.key_pair),
+			false => self.params.key_identifier.clone(),
+		}
 	}
 	/// Serializes the certificate to the binary DER format
 	pub fn serialize_der(&self) -> Result<Vec<u8>, Error> {

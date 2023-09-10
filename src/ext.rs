@@ -4,14 +4,15 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
+use crate::key_pair::PublicKeyData;
 use crate::oid::{
 	OID_AUTHORITY_KEY_IDENTIFIER, OID_CRL_DISTRIBUTION_POINTS, OID_EXT_KEY_USAGE, OID_KEY_USAGE,
-	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
+	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::Error;
 use crate::{
-	write_distinguished_name, Certificate, CrlDistributionPoint, ExtendedKeyUsagePurpose,
-	GeneralSubtree, KeyUsagePurpose, NameConstraints, SanType,
+	write_distinguished_name, Certificate, CertificateParams, CrlDistributionPoint,
+	ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose, NameConstraints, SanType,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -283,6 +284,24 @@ pub(crate) fn crl_distribution_points(
 					distribution_point.write_der(writer.next());
 				}
 			})
+		}),
+	}
+}
+
+/// An X.509v3 subject key identifier extension according to
+/// [RFC 5280 4.2.1.2](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.2).
+pub(crate) fn subject_key_identifier<K: PublicKeyData>(
+	params: &CertificateParams,
+	pub_key: &K,
+) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_SUBJECT_KEY_IDENTIFIER),
+		// Conforming CAs MUST mark this extension as non-critical.
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			// SubjectKeyIdentifier ::= KeyIdentifier
+			// KeyIdentifier ::= OCTET STRING
+			writer.write_bytes(&params.key_identifier(pub_key));
 		}),
 	}
 }
