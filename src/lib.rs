@@ -833,35 +833,21 @@ impl CertificateParams {
 			serial_number,
 			subject_alt_names: _,
 			distinguished_name,
-			is_ca,
-			key_usages,
-			extended_key_usages,
-			name_constraints,
-			crl_distribution_points,
+			is_ca: _,
+			key_usages: _,
+			extended_key_usages: _,
+			name_constraints: _,
+			crl_distribution_points: _,
 			custom_extensions: _,
 			key_pair,
-			use_authority_key_identifier_extension,
-			key_identifier_method,
-			key_identifier,
+			use_authority_key_identifier_extension: _,
+			key_identifier_method: _,
+			key_identifier: _,
 		} = self;
 		// - alg and key_pair will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
-		let _ = (
-			alg,
-			key_pair,
-			not_before,
-			not_after,
-			key_identifier_method,
-			key_identifier,
-		);
-		if serial_number.is_some()
-			|| *is_ca != IsCa::NoCa
-			|| !key_usages.is_empty()
-			|| !extended_key_usages.is_empty()
-			|| name_constraints.is_some()
-			|| !crl_distribution_points.is_empty()
-			|| *use_authority_key_identifier_extension
-		{
+		let _ = (alg, key_pair, not_before, not_after);
+		if serial_number.is_some() {
 			return Err(Error::UnsupportedInCsr);
 		}
 		writer.write_sequence(|writer| {
