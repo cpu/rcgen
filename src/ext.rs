@@ -5,10 +5,14 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::oid::{
-	OID_AUTHORITY_KEY_IDENTIFIER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_SUBJECT_ALT_NAME,
+	OID_AUTHORITY_KEY_IDENTIFIER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS,
+	OID_SUBJECT_ALT_NAME,
 };
 use crate::RcgenError;
-use crate::{Certificate, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType};
+use crate::{
+	write_distinguished_name, Certificate, ExtendedKeyUsagePurpose, GeneralSubtree,
+	KeyUsagePurpose, NameConstraints, SanType,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Criticality {
@@ -198,6 +202,66 @@ pub(crate) fn extended_key_usage(usages: &Vec<ExtendedKeyUsagePurpose>) -> Exten
 				for usage in usages.iter() {
 					let oid = ObjectIdentifier::from_slice(usage.oid());
 					writer.next().write_oid(&oid);
+				}
+			});
+		}),
+	}
+}
+
+/// An X.509v3 name constraints extension according to
+/// [RFC 5280 4.2.1.10](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10).
+pub(crate) fn name_constraints(constraints: &NameConstraints) -> Extension {
+	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
+		/*
+			GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
+
+			GeneralSubtree ::= SEQUENCE {
+				  base                    GeneralName,
+				  minimum         [0]     BaseDistance DEFAULT 0,
+				  maximum         [1]     BaseDistance OPTIONAL }
+
+			BaseDistance ::= INTEGER (0..MAX)
+		*/
+		writer.write_tagged_implicit(Tag::context(tag), |writer| {
+			writer.write_sequence(|writer| {
+				for subtree in general_subtrees.iter() {
+					writer.next().write_sequence(|writer| {
+						writer.next().write_tagged_implicit(
+							Tag::context(subtree.tag()),
+							|writer| match subtree {
+								GeneralSubtree::Rfc822Name(name)
+								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
+								GeneralSubtree::DirectoryName(name) => {
+									write_distinguished_name(writer, name)
+								},
+								GeneralSubtree::IpAddress(subnet) => {
+									writer.write_bytes(&subnet.to_bytes())
+								},
+							},
+						);
+						// minimum must be 0 (the default) and maximum must be absent
+					});
+				}
+			});
+		});
+	}
+
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_NAME_CONSTRAINTS),
+		// Conforming CAs MUST mark this extension as critical
+		criticality: Criticality::Critical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+				NameConstraints ::= SEQUENCE {
+					  permittedSubtrees       [0]     GeneralSubtrees OPTIONAL,
+					  excludedSubtrees        [1]     GeneralSubtrees OPTIONAL }
+			*/
+			writer.write_sequence(|writer| {
+				if !constraints.permitted_subtrees.is_empty() {
+					write_general_subtrees(writer.next(), 0, &constraints.permitted_subtrees);
+				}
+				if !constraints.excluded_subtrees.is_empty() {
+					write_general_subtrees(writer.next(), 1, &constraints.excluded_subtrees);
 				}
 			});
 		}),
