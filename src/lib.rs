@@ -980,34 +980,6 @@ impl CertificateParams {
 							ext.write_der(writer.next());
 						}
 
-						if let Some(name_constraints) = &self.name_constraints {
-							// If both trees are empty, the extension must be omitted.
-							if !name_constraints.is_empty() {
-								write_x509_extension(
-									writer.next(),
-									OID_NAME_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											if !name_constraints.permitted_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													0,
-													&name_constraints.permitted_subtrees,
-												);
-											}
-											if !name_constraints.excluded_subtrees.is_empty() {
-												write_general_subtrees(
-													writer.next(),
-													1,
-													&name_constraints.excluded_subtrees,
-												);
-											}
-										});
-									},
-								);
-							}
-						}
 						if !self.crl_distribution_points.is_empty() {
 							write_x509_extension(
 								writer.next(),
@@ -1151,7 +1123,12 @@ impl CertificateParams {
 			exts.add_extension(ext::extended_key_usage(&self.extended_key_usages))?;
 		}
 
-		// TODO: name constraints.
+		if let Some(name_constraints) = &self.name_constraints {
+			if !name_constraints.is_empty() {
+				exts.add_extension(ext::name_constraints(name_constraints))?;
+			}
+		}
+
 		// TODO: crl distribution points.
 		// TODO: basic constraints.
 		// TODO: subject key identifier.
@@ -1425,33 +1402,6 @@ fn write_distinguished_name(writer: DERWriter, dn: &DistinguishedName) {
 				});
 			});
 		}
-	});
-}
-
-fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
-	writer.write_tagged_implicit(Tag::context(tag), |writer| {
-		writer.write_sequence(|writer| {
-			for subtree in general_subtrees.iter() {
-				writer.next().write_sequence(|writer| {
-					writer
-						.next()
-						.write_tagged_implicit(
-							Tag::context(subtree.tag()),
-							|writer| match subtree {
-								GeneralSubtree::Rfc822Name(name)
-								| GeneralSubtree::DnsName(name) => writer.write_ia5_string(name),
-								GeneralSubtree::DirectoryName(name) => {
-									write_distinguished_name(writer, name)
-								},
-								GeneralSubtree::IpAddress(subnet) => {
-									writer.write_bytes(&subnet.to_bytes())
-								},
-							},
-						);
-					// minimum must be 0 (the default) and maximum must be absent
-				});
-			}
-		});
 	});
 }
 
