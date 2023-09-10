@@ -90,6 +90,10 @@ impl Extensions {
 		})
 	}
 
+	pub(crate) fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
+
 	pub(crate) fn iter(self: &Self) -> impl Iterator<Item = &Extension> {
 		self.0.values()
 	}

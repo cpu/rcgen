@@ -831,14 +831,14 @@ impl CertificateParams {
 			not_before,
 			not_after,
 			serial_number,
-			subject_alt_names,
+			subject_alt_names: _,
 			distinguished_name,
 			is_ca,
 			key_usages,
 			extended_key_usages,
 			name_constraints,
 			crl_distribution_points,
-			custom_extensions,
+			custom_extensions: _,
 			key_pair,
 			use_authority_key_identifier_extension,
 			key_identifier_method,
@@ -904,7 +904,7 @@ impl CertificateParams {
 			// According to the spec in RFC 2986, even if attributes are empty we need the empty attribute tag
 			writer.next().write_tagged(Tag::context(0), |writer| {
 				let extensions = self.extensions(None, pub_key)?;
-				if !subject_alt_names.is_empty() || !custom_extensions.is_empty() {
+				if !extensions.is_empty() {
 					writer.write_sequence(|writer| {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
@@ -955,14 +955,7 @@ impl CertificateParams {
 			pub_key.serialize_public_key_der(writer.next());
 			// write extensions
 			let extensions = self.extensions(Some(ca), pub_key)?;
-			let should_write_exts = self.use_authority_key_identifier_extension
-				|| !self.subject_alt_names.is_empty()
-				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.iter().any(|c| !c.is_empty())
-				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-				|| matches!(self.is_ca, IsCa::Ca(_))
-				|| !self.custom_extensions.is_empty();
-			if should_write_exts {
+			if !extensions.is_empty() {
 				writer.next().write_tagged(Tag::context(3), |writer| {
 					extensions.write_der(writer);
 				});
