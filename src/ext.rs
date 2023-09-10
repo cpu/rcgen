@@ -5,13 +5,13 @@ use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
 use crate::oid::{
-	OID_AUTHORITY_KEY_IDENTIFIER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS,
-	OID_SUBJECT_ALT_NAME,
+	OID_AUTHORITY_KEY_IDENTIFIER, OID_CRL_DISTRIBUTION_POINTS, OID_EXT_KEY_USAGE, OID_KEY_USAGE,
+	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
 };
 use crate::Error;
 use crate::{
-	write_distinguished_name, Certificate, ExtendedKeyUsagePurpose, GeneralSubtree,
-	KeyUsagePurpose, NameConstraints, SanType,
+	write_distinguished_name, Certificate, CrlDistributionPoint, ExtendedKeyUsagePurpose,
+	GeneralSubtree, KeyUsagePurpose, NameConstraints, SanType,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -264,6 +264,25 @@ pub(crate) fn name_constraints(constraints: &NameConstraints) -> Extension {
 					write_general_subtrees(writer.next(), 1, &constraints.excluded_subtrees);
 				}
 			});
+		}),
+	}
+}
+
+/// An X.509v3 CRL distribution points extension according to
+/// [RFC 5280 4.2.1.13](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13).
+pub(crate) fn crl_distribution_points(
+	crl_distribution_points: &Vec<CrlDistributionPoint>,
+) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_CRL_DISTRIBUTION_POINTS),
+		// The extension SHOULD be non-critical
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			writer.write_sequence(|writer| {
+				for distribution_point in crl_distribution_points {
+					distribution_point.write_der(writer.next());
+				}
+			})
 		}),
 	}
 }
