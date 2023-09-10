@@ -4,13 +4,12 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::oid::{OID_AUTHORITY_KEY_IDENTIFIER, OID_SUBJECT_ALT_NAME};
+use crate::oid::{OID_AUTHORITY_KEY_IDENTIFIER, OID_KEY_USAGE, OID_SUBJECT_ALT_NAME};
 use crate::RcgenError;
-use crate::{Certificate, SanType};
+use crate::{Certificate, KeyUsagePurpose, SanType};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Criticality {
-	#[allow(dead_code)] // TODO: remove once first critical ext ported to this mod.
 	Critical,
 	NonCritical,
 }
@@ -122,6 +121,60 @@ pub(crate) fn subject_alternative_names(names: &Vec<SanType>) -> Extension {
 					);
 				}
 			});
+		}),
+	}
+}
+
+/// An X.509v3 key usage extension according to
+/// [RFC 5280 4.2.1.3](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3).
+pub(crate) fn key_usage(usages: &Vec<KeyUsagePurpose>) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_KEY_USAGE),
+		// When present, conforming CAs SHOULD mark this extension as critical.
+		criticality: Criticality::Critical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+			   KeyUsage ::= BIT STRING {
+				  digitalSignature        (0),
+				  nonRepudiation          (1), -- recent editions of X.509 have
+									   -- renamed this bit to contentCommitment
+				  keyEncipherment         (2),
+				  dataEncipherment        (3),
+				  keyAgreement            (4),
+				  keyCertSign             (5),
+				  cRLSign                 (6),
+				  encipherOnly            (7),
+				  decipherOnly            (8) }
+			*/
+			let mut bits: u16 = 0;
+
+			for entry in usages.iter() {
+				// Map the index to a value
+				let index = match entry {
+					KeyUsagePurpose::DigitalSignature => 0,
+					KeyUsagePurpose::ContentCommitment => 1,
+					KeyUsagePurpose::KeyEncipherment => 2,
+					KeyUsagePurpose::DataEncipherment => 3,
+					KeyUsagePurpose::KeyAgreement => 4,
+					KeyUsagePurpose::KeyCertSign => 5,
+					KeyUsagePurpose::CrlSign => 6,
+					KeyUsagePurpose::EncipherOnly => 7,
+					KeyUsagePurpose::DecipherOnly => 8,
+				};
+
+				bits |= 1 << index;
+			}
+
+			// Compute the 1-based most significant bit
+			let msb = 16 - bits.leading_zeros();
+			let nb = if msb <= 8 { 1 } else { 2 };
+
+			let bits = bits.reverse_bits().to_be_bytes();
+
+			// Finally take only the bytes != 0
+			let bits = &bits[..nb];
+
+			writer.write_bitvec_bytes(&bits, msb as usize)
 		}),
 	}
 }

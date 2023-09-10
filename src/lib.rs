@@ -981,41 +981,6 @@ impl CertificateParams {
 							ext.write_der(writer.next());
 						}
 
-						// Write standard key usage
-						if !self.key_usages.is_empty() {
-							write_x509_extension(writer.next(), OID_KEY_USAGE, true, |writer| {
-								let mut bits: u16 = 0;
-
-								for entry in self.key_usages.iter() {
-									// Map the index to a value
-									let index = match entry {
-										KeyUsagePurpose::DigitalSignature => 0,
-										KeyUsagePurpose::ContentCommitment => 1,
-										KeyUsagePurpose::KeyEncipherment => 2,
-										KeyUsagePurpose::DataEncipherment => 3,
-										KeyUsagePurpose::KeyAgreement => 4,
-										KeyUsagePurpose::KeyCertSign => 5,
-										KeyUsagePurpose::CrlSign => 6,
-										KeyUsagePurpose::EncipherOnly => 7,
-										KeyUsagePurpose::DecipherOnly => 8,
-									};
-
-									bits |= 1 << index;
-								}
-
-								// Compute the 1-based most significant bit
-								let msb = 16 - bits.leading_zeros();
-								let nb = if msb <= 8 { 1 } else { 2 };
-
-								let bits = bits.reverse_bits().to_be_bytes();
-
-								// Finally take only the bytes != 0
-								let bits = &bits[..nb];
-
-								writer.write_bitvec_bytes(&bits, msb as usize)
-							});
-						}
-
 						// Write extended key usage
 						if !self.extended_key_usages.is_empty() {
 							write_x509_extension(
@@ -1195,7 +1160,10 @@ impl CertificateParams {
 			exts.add_extension(ext::subject_alternative_names(&self.subject_alt_names))?;
 		}
 
-		// TODO: KU.
+		if !self.key_usages.is_empty() {
+			exts.add_extension(ext::key_usage(&self.key_usages))?;
+		}
+
 		// TODO: EKU.
 		// TODO: name constraints.
 		// TODO: crl distribution points.
