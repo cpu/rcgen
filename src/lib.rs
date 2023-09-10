@@ -917,16 +917,6 @@ impl CertificateParams {
 								for ext in extensions.iter() {
 									ext.write_der(writer.next());
 								}
-
-								// Write custom extensions
-								for ext in custom_extensions {
-									write_x509_extension(
-										writer.next(),
-										&ext.oid,
-										ext.critical,
-										|writer| writer.write_der(ext.content()),
-									);
-								}
 							});
 						});
 					});
@@ -988,13 +978,6 @@ impl CertificateParams {
 						//       extensions to self.extensions().
 						for ext in extensions.iter() {
 							ext.write_der(writer.next());
-						}
-
-						// Write the custom extensions
-						for ext in &self.custom_extensions {
-							write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-								writer.write_der(ext.content())
-							});
 						}
 					});
 				});
@@ -1084,7 +1067,7 @@ impl CertificateParams {
 			exts.add_extension(ext::basic_constraints(&self.is_ca))?;
 		}
 
-		// TODO: custom extensions
+		exts.add_custom_extensions(&self.custom_extensions)?;
 
 		Ok(exts)
 	}

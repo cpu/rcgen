@@ -13,8 +13,8 @@ use crate::oid::{
 use crate::RcgenError;
 use crate::{
 	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
-	CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose,
-	NameConstraints, SanType,
+	CrlDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa,
+	KeyUsagePurpose, NameConstraints, SanType,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -61,6 +61,24 @@ impl Extensions {
 		}
 
 		self.0.insert(extension.oid.clone(), extension);
+		Ok(())
+	}
+
+	pub(crate) fn add_custom_extensions(
+		&mut self,
+		extensions: &Vec<CustomExtension>,
+	) -> Result<(), RcgenError> {
+		for custom_ext in extensions {
+			self.add_extension(Extension {
+				oid: ObjectIdentifier::from_slice(&custom_ext.oid),
+				criticality: if custom_ext.critical {
+					Criticality::Critical
+				} else {
+					Criticality::NonCritical
+				},
+				der_value: yasna::construct_der(|writer| writer.write_der(&custom_ext.content)),
+			})?;
+		}
 		Ok(())
 	}
 
