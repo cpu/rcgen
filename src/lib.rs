@@ -814,28 +814,7 @@ impl CertificateParams {
 		}
 		Ok(result)
 	}
-	fn write_subject_alt_names(&self, writer: DERWriter) {
-		write_x509_extension(writer, OID_SUBJECT_ALT_NAME, false, |writer| {
-			writer.write_sequence(|writer| {
-				for san in self.subject_alt_names.iter() {
-					writer.next().write_tagged_implicit(
-						Tag::context(san.tag()),
-						|writer| match san {
-							SanType::Rfc822Name(name)
-							| SanType::DnsName(name)
-							| SanType::URI(name) => writer.write_ia5_string(name),
-							SanType::IpAddress(IpAddr::V4(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-							SanType::IpAddress(IpAddr::V6(addr)) => {
-								writer.write_bytes(&addr.octets())
-							},
-						},
-					);
-				}
-			});
-		});
-	}
+
 	fn write_request<K: PublicKeyData>(
 		&self,
 		pub_key: &K,
@@ -930,9 +909,6 @@ impl CertificateParams {
 									ext.write_der(writer.next());
 								}
 
-								// Write subject_alt_names
-								self.write_subject_alt_names(writer.next());
-
 								// Write custom extensions
 								for ext in custom_extensions {
 									write_x509_extension(
@@ -1003,11 +979,6 @@ impl CertificateParams {
 						//       extensions to self.extensions().
 						for ext in extensions.iter() {
 							ext.write_der(writer.next());
-						}
-
-						// Write subject_alt_names
-						if !self.subject_alt_names.is_empty() {
-							self.write_subject_alt_names(writer.next());
 						}
 
 						// Write standard key usage
@@ -1220,7 +1191,10 @@ impl CertificateParams {
 			exts.add_extension(ext::authority_key_identifier(issuer))?;
 		}
 
-		// TODO: SAN.
+		if !self.subject_alt_names.is_empty() {
+			exts.add_extension(ext::subject_alternative_names(&self.subject_alt_names))?;
+		}
+
 		// TODO: KU.
 		// TODO: EKU.
 		// TODO: name constraints.
