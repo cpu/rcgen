@@ -4,9 +4,11 @@ use std::net::IpAddr;
 use yasna::models::ObjectIdentifier;
 use yasna::{DERWriter, Tag};
 
-use crate::oid::{OID_AUTHORITY_KEY_IDENTIFIER, OID_KEY_USAGE, OID_SUBJECT_ALT_NAME};
+use crate::oid::{
+	OID_AUTHORITY_KEY_IDENTIFIER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_SUBJECT_ALT_NAME,
+};
 use crate::Error;
-use crate::{Certificate, KeyUsagePurpose, SanType};
+use crate::{Certificate, ExtendedKeyUsagePurpose, KeyUsagePurpose, SanType};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Criticality {
@@ -175,6 +177,29 @@ pub(crate) fn key_usage(usages: &Vec<KeyUsagePurpose>) -> Extension {
 			let bits = &bits[..nb];
 
 			writer.write_bitvec_bytes(&bits, msb as usize)
+		}),
+	}
+}
+
+/// An X.509v3 extended key usage extension according to
+/// [RFC 5280 4.2.1.12](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12).
+pub(crate) fn extended_key_usage(usages: &Vec<ExtendedKeyUsagePurpose>) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_EXT_KEY_USAGE),
+		// This extension MAY, at the option of the certificate issuer, be
+		// either critical or non-critical.
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+				  ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
+				  KeyPurposeId ::= OBJECT IDENTIFIER
+			*/
+			writer.write_sequence(|writer| {
+				for usage in usages.iter() {
+					let oid = ObjectIdentifier::from_slice(usage.oid());
+					writer.next().write_oid(&oid);
+				}
+			});
 		}),
 	}
 }
