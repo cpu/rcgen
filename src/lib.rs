@@ -981,22 +981,6 @@ impl CertificateParams {
 							ext.write_der(writer.next());
 						}
 
-						// Write extended key usage
-						if !self.extended_key_usages.is_empty() {
-							write_x509_extension(
-								writer.next(),
-								OID_EXT_KEY_USAGE,
-								false,
-								|writer| {
-									writer.write_sequence(|writer| {
-										for usage in self.extended_key_usages.iter() {
-											let oid = ObjectIdentifier::from_slice(usage.oid());
-											writer.next().write_oid(&oid);
-										}
-									});
-								},
-							);
-						}
 						if let Some(name_constraints) = &self.name_constraints {
 							// If both trees are empty, the extension must be omitted.
 							if !name_constraints.is_empty() {
@@ -1164,7 +1148,10 @@ impl CertificateParams {
 			exts.add_extension(ext::key_usage(&self.key_usages))?;
 		}
 
-		// TODO: EKU.
+		if !self.extended_key_usages.is_empty() {
+			exts.add_extension(ext::extended_key_usage(&self.extended_key_usages))?;
+		}
+
 		// TODO: name constraints.
 		// TODO: crl distribution points.
 		// TODO: basic constraints.
