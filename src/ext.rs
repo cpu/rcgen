@@ -7,14 +7,14 @@ use yasna::{DERWriter, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{
 	OID_AUTHORITY_KEY_IDENTIFIER, OID_BASIC_CONSTRAINTS, OID_CRL_DISTRIBUTION_POINTS,
-	OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
+	OID_CRL_NUMBER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
 	OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::Error;
 use crate::{
 	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
 	CrlDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa,
-	KeyUsagePurpose, NameConstraints, SanType,
+	KeyUsagePurpose, NameConstraints, SanType, SerialNumber,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -360,6 +360,21 @@ pub(crate) fn basic_constraints(is_ca: &IsCa) -> Extension {
 					writer.next().write_u8(*path_len_constraint);
 				}
 			});
+		}),
+	}
+}
+
+/// An X.509v3 CRL number extension according to
+/// [RFC 5280 5.2.3](https://www.rfc-editor.org/rfc/rfc5280#section-5.2.3)
+pub(crate) fn crl_number(number: &SerialNumber) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_CRL_NUMBER),
+		// CRL issuers conforming to this profile MUST include this extension in all
+		// CRLs and MUST mark this extension as non-critical.
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			// CRLNumber ::= INTEGER (0..MAX)
+			writer.write_bigint_bytes(number.as_ref(), true);
 		}),
 	}
 }
