@@ -910,14 +910,7 @@ impl CertificateParams {
 						let oid = ObjectIdentifier::from_slice(OID_PKCS_9_AT_EXTENSION_REQUEST);
 						writer.next().write_oid(&oid);
 						writer.next().write_set(|writer| {
-							writer.next().write_sequence(|writer| {
-								// TODO: have the Extensions type write the outer sequence and each
-								// 		 contained extension once we've ported each of the below
-								//       extensions to self.extensions().
-								for ext in extensions.iter() {
-									ext.write_der(writer.next());
-								}
-							});
+							extensions.write_der(writer.next());
 						});
 					});
 				}
@@ -972,14 +965,7 @@ impl CertificateParams {
 				|| !self.custom_extensions.is_empty();
 			if should_write_exts {
 				writer.next().write_tagged(Tag::context(3), |writer| {
-					writer.write_sequence(|writer| {
-						// TODO: have the Extensions type write the outer sequence and each
-						// 		 contained extension once we've ported each of the below
-						//       extensions to self.extensions().
-						for ext in extensions.iter() {
-							ext.write_der(writer.next());
-						}
-					});
+					extensions.write_der(writer);
 				});
 			}
 			Ok(())
