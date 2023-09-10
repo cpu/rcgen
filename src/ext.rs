@@ -7,14 +7,14 @@ use yasna::{DERWriter, Tag};
 use crate::key_pair::PublicKeyData;
 use crate::oid::{
 	OID_AUTHORITY_KEY_IDENTIFIER, OID_BASIC_CONSTRAINTS, OID_CRL_DISTRIBUTION_POINTS,
-	OID_CRL_NUMBER, OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
-	OID_SUBJECT_KEY_IDENTIFIER,
+	OID_CRL_ISSUING_DISTRIBUTION_POINT, OID_CRL_NUMBER, OID_EXT_KEY_USAGE, OID_KEY_USAGE,
+	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::Error;
 use crate::{
 	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
-	CrlDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa,
-	KeyUsagePurpose, NameConstraints, SanType, SerialNumber,
+	CrlDistributionPoint, CrlIssuingDistributionPoint, CustomExtension, ExtendedKeyUsagePurpose,
+	GeneralSubtree, IsCa, KeyUsagePurpose, NameConstraints, SanType, SerialNumber,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -375,6 +375,22 @@ pub(crate) fn crl_number(number: &SerialNumber) -> Extension {
 		der_value: yasna::construct_der(|writer| {
 			// CRLNumber ::= INTEGER (0..MAX)
 			writer.write_bigint_bytes(number.as_ref(), true);
+		}),
+	}
+}
+
+/// An X.509v3 issuing distribution point extension according to
+/// [RFC 5280 5.2.5](https://www.rfc-editor.org/rfc/rfc5280#section-5.2.5)
+pub(crate) fn issuing_distribution_point(
+	distribution_point: &CrlIssuingDistributionPoint,
+) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_CRL_ISSUING_DISTRIBUTION_POINT),
+		// Although the extension is critical, conforming implementations are not required to support this
+		// extension.
+		criticality: Criticality::Critical,
+		der_value: yasna::construct_der(|writer| {
+			distribution_point.write_der(writer);
 		}),
 	}
 }
