@@ -6,13 +6,15 @@ use yasna::{DERWriter, Tag};
 
 use crate::key_pair::PublicKeyData;
 use crate::oid::{
-	OID_AUTHORITY_KEY_IDENTIFIER, OID_CRL_DISTRIBUTION_POINTS, OID_EXT_KEY_USAGE, OID_KEY_USAGE,
-	OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME, OID_SUBJECT_KEY_IDENTIFIER,
+	OID_AUTHORITY_KEY_IDENTIFIER, OID_BASIC_CONSTRAINTS, OID_CRL_DISTRIBUTION_POINTS,
+	OID_EXT_KEY_USAGE, OID_KEY_USAGE, OID_NAME_CONSTRAINTS, OID_SUBJECT_ALT_NAME,
+	OID_SUBJECT_KEY_IDENTIFIER,
 };
 use crate::RcgenError;
 use crate::{
-	write_distinguished_name, Certificate, CertificateParams, CrlDistributionPoint,
-	ExtendedKeyUsagePurpose, GeneralSubtree, KeyUsagePurpose, NameConstraints, SanType,
+	write_distinguished_name, BasicConstraints, Certificate, CertificateParams,
+	CrlDistributionPoint, ExtendedKeyUsagePurpose, GeneralSubtree, IsCa, KeyUsagePurpose,
+	NameConstraints, SanType,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -302,6 +304,32 @@ pub(crate) fn subject_key_identifier<K: PublicKeyData>(
 			// SubjectKeyIdentifier ::= KeyIdentifier
 			// KeyIdentifier ::= OCTET STRING
 			writer.write_bytes(&params.key_identifier(pub_key));
+		}),
+	}
+}
+
+/// An X.509v3 basic constraints extension according to
+/// [RFC 5280 4.2.1.9](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.9).
+pub(crate) fn basic_constraints(is_ca: &IsCa) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_BASIC_CONSTRAINTS),
+		// Conforming CAs MUST include this extension in all CA certificates
+		// that contain public keys used to validate digital signatures on
+		// certificates and MUST mark the extension as critical in such
+		// certificates
+		criticality: Criticality::Critical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+				BasicConstraints ::= SEQUENCE {
+				  cA                      BOOLEAN DEFAULT FALSE,
+				  pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+			*/
+			writer.write_sequence(|writer| {
+				writer.next().write_bool(matches!(is_ca, IsCa::Ca(_)));
+				if let IsCa::Ca(BasicConstraints::Constrained(path_len_constraint)) = is_ca {
+					writer.next().write_u8(*path_len_constraint);
+				}
+			});
 		}),
 	}
 }
