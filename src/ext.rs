@@ -1,13 +1,16 @@
 use std::collections::BTreeMap;
 
 use yasna::models::ObjectIdentifier;
-use yasna::DERWriter;
+use yasna::{DERWriter, Tag};
+
+use crate::oid::OID_AUTHORITY_KEY_IDENTIFIER;
+use crate::Certificate;
 
 use crate::Error;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[allow(dead_code)] // TODO: Remove once used in lib.rs
 pub(crate) enum Criticality {
+	#[allow(dead_code)] // TODO: remove once first critical ext ported to this mod.
 	Critical,
 	NonCritical,
 }
@@ -44,7 +47,6 @@ impl Extension {
 pub(crate) struct Extensions(BTreeMap<ObjectIdentifier, Extension>);
 
 impl Extensions {
-	#[allow(dead_code)] // TODO: Remove once used in lib.rs
 	pub(crate) fn add_extension(&mut self, extension: Extension) -> Result<(), Error> {
 		if self.0.get(&extension.oid).is_some() {
 			return Err(Error::DuplicateExtension(extension.oid.to_string()));
@@ -56,5 +58,32 @@ impl Extensions {
 
 	pub(crate) fn iter(self: &Self) -> impl Iterator<Item = &Extension> {
 		self.0.values()
+	}
+}
+
+/// An X.509v3 authority key identifier extension according to
+/// [RFC 5280 4.2.1.1](https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.1).
+pub(crate) fn authority_key_identifier(cert: &Certificate) -> Extension {
+	Extension {
+		oid: ObjectIdentifier::from_slice(OID_AUTHORITY_KEY_IDENTIFIER),
+		// Conforming CAs MUST mark this extension as non-critical.
+		criticality: Criticality::NonCritical,
+		der_value: yasna::construct_der(|writer| {
+			/*
+				AuthorityKeyIdentifier ::= SEQUENCE {
+					   keyIdentifier             [0] KeyIdentifier           OPTIONAL,
+					   authorityCertIssuer       [1] GeneralNames            OPTIONAL,
+					   authorityCertSerialNumber [2] CertificateSerialNumber OPTIONAL  }
+
+				KeyIdentifier ::= OCTET STRING
+			*/
+			writer.write_sequence(|writer| {
+				writer
+					.next()
+					.write_tagged_implicit(Tag::context(0), |writer| {
+						writer.write_bytes(cert.get_key_identifier().as_ref())
+					})
+			});
+		}),
 	}
 }
