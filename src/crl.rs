@@ -257,18 +257,6 @@ impl CertificateRevocationListParams {
 					for ext in self.extensions(Some(ca)).iter() {
 						ext.write_der(writer.next());
 					}
-
-					// Write issuing distribution point (if present).
-					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
-						write_x509_extension(
-							writer.next(),
-							OID_CRL_ISSUING_DISTRIBUTION_POINT,
-							true,
-							|writer| {
-								issuing_distribution_point.write_der(writer);
-							},
-						);
-					}
 				});
 			});
 
@@ -292,7 +280,11 @@ impl CertificateRevocationListParams {
 		exts.add_extension(ext::crl_number(&self.crl_number))
 			.unwrap();
 
-		// TODO: issuing distribution point.
+		if let Some(distribution_point) = &self.issuing_distribution_point {
+			// Safety: there can be no duplicate IDP ext OID.
+			exts.add_extension(ext::issuing_distribution_point(distribution_point))
+				.unwrap();
+		}
 
 		exts
 	}
@@ -309,7 +301,7 @@ pub struct CrlIssuingDistributionPoint {
 }
 
 impl CrlIssuingDistributionPoint {
-	fn write_der(&self, writer: DERWriter) {
+	pub(crate) fn write_der(&self, writer: DERWriter) {
 		// IssuingDistributionPoint SEQUENCE
 		writer.write_sequence(|writer| {
 			// distributionPoint [0] DistributionPointName OPTIONAL
