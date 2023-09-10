@@ -258,11 +258,6 @@ impl CertificateRevocationListParams {
 						ext.write_der(writer.next());
 					}
 
-					// Write CRL number.
-					write_x509_extension(writer.next(), OID_CRL_NUMBER, false, |writer| {
-						writer.write_bigint_bytes(self.crl_number.as_ref(), true);
-					});
-
 					// Write issuing distribution point (if present).
 					if let Some(issuing_distribution_point) = &self.issuing_distribution_point {
 						write_x509_extension(
@@ -293,7 +288,10 @@ impl CertificateRevocationListParams {
 				.unwrap();
 		}
 
-		// TODO: CRL number.
+		// Safety: there can be no duplicate CRL number ext OID.
+		exts.add_extension(ext::crl_number(&self.crl_number))
+			.unwrap();
+
 		// TODO: issuing distribution point.
 
 		exts
