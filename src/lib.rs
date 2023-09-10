@@ -989,42 +989,6 @@ impl CertificateParams {
 							ext.write_der(writer.next());
 						}
 
-						match self.is_ca {
-							IsCa::Ca(ref constraint) => {
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									OID_BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(true); // cA flag
-											if let BasicConstraints::Constrained(
-												path_len_constraint,
-											) = constraint
-											{
-												writer.next().write_u8(*path_len_constraint);
-											}
-										});
-									},
-								);
-							},
-							IsCa::ExplicitNoCa => {
-								// Write basic_constraints
-								write_x509_extension(
-									writer.next(),
-									OID_BASIC_CONSTRAINTS,
-									true,
-									|writer| {
-										writer.write_sequence(|writer| {
-											writer.next().write_bool(false); // cA flag
-										});
-									},
-								);
-							},
-							IsCa::NoCa => {},
-						}
-
 						// Write the custom extensions
 						for ext in &self.custom_extensions {
 							write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
@@ -1115,7 +1079,10 @@ impl CertificateParams {
 
 		exts.add_extension(ext::subject_key_identifier(&self, pub_key))?;
 
-		// TODO: basic constraints.
+		if matches!(self.is_ca, IsCa::Ca(_) | IsCa::ExplicitNoCa) {
+			exts.add_extension(ext::basic_constraints(&self.is_ca))?;
+		}
+
 		// TODO: custom extensions
 
 		Ok(exts)
