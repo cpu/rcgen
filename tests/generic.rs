@@ -335,7 +335,7 @@ mod test_csr_exts {
 mod test_x509_custom_ext {
 	use crate::util;
 
-	use rcgen::{Certificate, CustomExtension};
+	use rcgen::{Certificate, CertificateSigningRequest, CustomExtension};
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
 		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
@@ -396,8 +396,20 @@ mod test_x509_custom_ext {
 			.iter()
 			.find(|ext| ext.oid == test_oid)
 			.expect("missing requested custom extension");
-		assert_eq!(custom_ext.critical, true);
+		assert!(custom_ext.critical);
 		assert_eq!(custom_ext.value, test_ext);
+
+		// We should be able to create an rcgen CSR from the serialized CSR.
+		let rcgen_csr = CertificateSigningRequest::from_der(&test_cert_csr_der).unwrap();
+		// The custom extensions should be present in the CSR.
+		let custom_ext = rcgen_csr
+			.params
+			.custom_extensions
+			.iter()
+			.find(|ext| Iterator::eq(ext.oid_components(), test_oid.iter().unwrap()))
+			.expect("missing requested custom extension");
+		assert!(custom_ext.criticality());
+		assert_eq!(custom_ext.content(), test_ext);
 	}
 }
 

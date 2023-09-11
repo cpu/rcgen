@@ -1,5 +1,5 @@
 #[cfg(feature = "x509-parser")]
-use crate::{DistinguishedName, SanType};
+use crate::{CustomExtension, DistinguishedName, SanType};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use std::hash::Hash;
@@ -66,20 +66,48 @@ impl CertificateSigningRequest {
 		params.distinguished_name = DistinguishedName::from_name(&info.subject)?;
 		let raw = info.subject_pki.subject_public_key.data.to_vec();
 
-		if let Some(extensions) = csr.requested_extensions() {
-			for ext in extensions {
-				match ext {
+		// Pull out the extension requests attributes from the CSR.
+		// Note: we avoid using csr.requested_extensions() here because it maps to the parsed
+		// extension value and we want the raw extension value to handle unknown extensions
+		// ourselves.
+		let requested_exts = csr
+			.certification_request_info
+			.iter_attributes()
+			.filter_map(|attr| {
+				if let x509_parser::prelude::ParsedCriAttribute::ExtensionRequest(requested) =
+					&attr.parsed_attribute()
+				{
+					Some(requested.extensions.iter().collect::<Vec<_>>())
+				} else {
+					None
+				}
+			})
+			.flatten()
+			.collect::<Vec<_>>();
+
+		if !requested_exts.is_empty() {
+			for ext in requested_exts {
+				let supported = match ext.parsed_extension() {
 					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
 						for name in &san.general_names {
 							params
 								.subject_alt_names
 								.push(SanType::try_from_general(name)?);
 						}
+						true
 					},
 					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
 						params.key_identifier = ski.0.to_vec();
+						true
 					},
-					_ => return Err(Error::UnsupportedExtension),
+					_ => false,
+				};
+				if !supported {
+					params.custom_extensions.push(CustomExtension {
+						oid: ext.oid.iter().unwrap().collect(),
+						critical: ext.critical,
+						content: ext.value.to_vec(),
+					})
 				}
 			}
 		}
