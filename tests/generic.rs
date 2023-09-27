@@ -2,6 +2,8 @@ mod util;
 
 #[cfg(feature = "pem")]
 mod test_key_params_mismatch {
+	use crate::util;
+
 	use rcgen::{Certificate, KeyPair, RcgenError};
 	use std::collections::hash_map::DefaultHasher;
 	use std::hash::{Hash, Hasher};
