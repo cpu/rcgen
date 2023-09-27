@@ -1,14 +1,15 @@
 #![allow(clippy::complexity, clippy::style, clippy::pedantic)]
 
-use rand::rngs::OsRng;
-use rsa::pkcs8::EncodePrivateKey;
-use rsa::RsaPrivateKey;
-
-use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
-use std::convert::TryFrom;
-use std::fs;
-
+#[cfg(feature = "pem")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+	use rand::rngs::OsRng;
+	use rsa::pkcs8::EncodePrivateKey;
+	use rsa::RsaPrivateKey;
+
+	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
+	use std::convert::TryFrom;
+	use std::fs;
+
 	let mut params: CertificateParams = Default::default();
 	params.not_before = date_time_ymd(2021, 05, 19);
 	params.not_after = date_time_ymd(4096, 01, 01);
@@ -41,4 +42,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	)?;
 	fs::write("certs/key.der", &cert.serialize_private_key_der())?;
 	Ok(())
+}
+
+#[cfg(not(feature = "pem"))]
+fn main() {
+	eprintln!("This example requires the `pem` feature to be enabled.");
 }
