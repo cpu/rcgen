@@ -92,9 +92,8 @@ mod test_convert_x509_subject_alternative_name {
 #[cfg(feature = "x509-parser")]
 mod test_x509_custom_ext {
 	use crate::util;
-	use crate::Certificate;
 
-	use rcgen::CustomExtension;
+	use rcgen::{Certificate, CustomExtension};
 	use x509_parser::oid_registry::asn1_rs;
 	use x509_parser::prelude::{
 		FromDer, ParsedCriAttribute, X509Certificate, X509CertificationRequest,
