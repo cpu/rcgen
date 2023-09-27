@@ -3,7 +3,6 @@
 #[cfg(feature = "pem")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
-	use std::convert::TryInto;
 	use std::fs;
 
 	let mut params: CertificateParams = Default::default();

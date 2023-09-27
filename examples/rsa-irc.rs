@@ -7,7 +7,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	use rsa::RsaPrivateKey;
 
 	use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName};
-	use std::convert::TryFrom;
 	use std::fs;
 
 	let mut params: CertificateParams = Default::default();
