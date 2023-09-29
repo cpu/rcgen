@@ -90,6 +90,248 @@ mod test_convert_x509_subject_alternative_name {
 }
 
 #[cfg(feature = "x509-parser")]
+mod test_csr_exts {
+	use crate::util;
+	use rcgen::{
+		BasicConstraints, Certificate, CrlDistributionPoint, GeneralSubtree, KeyUsagePurpose,
+		SanType,
+	};
+	use x509_parser::prelude::{
+		FromDer, ParsedExtension, X509Certificate, X509CertificationRequest,
+	};
+
+	#[test]
+	fn test_rcgen_extensions() {
+		// Create a certificate that has several rcgen managed extensions (e.g. not custom extensions).
+		let mut params = util::default_params();
+		let san_name = "san.example.com";
+		params.subject_alt_names = vec![SanType::DnsName(san_name.into())];
+		let path_len_constraint = 3;
+		params.is_ca = rcgen::IsCa::Ca(BasicConstraints::Constrained(path_len_constraint));
+		params.key_usages = vec![
+			KeyUsagePurpose::DigitalSignature,
+			KeyUsagePurpose::KeyEncipherment,
+		];
+		params.extended_key_usages = vec![
+			rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+			rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+		];
+		let permitted_subtree_dns = "example.com";
+		let excluded_subtree_dns = "example.org";
+		params.name_constraints = Some(rcgen::NameConstraints {
+			permitted_subtrees: vec![GeneralSubtree::DnsName(permitted_subtree_dns.into())],
+			excluded_subtrees: vec![GeneralSubtree::DnsName(excluded_subtree_dns.into())],
+		});
+		let distribution_point_uri = "http://example.com";
+		params.crl_distribution_points = vec![CrlDistributionPoint {
+			uris: vec![distribution_point_uri.into()],
+		}];
+		let cert = Certificate::from_params(params).unwrap();
+		let cert_der = cert.serialize_der().unwrap();
+		let csr_der = cert.serialize_request_der().unwrap();
+
+		// Parse the self-signed test certificate, and a CSR generated from the test certificate with x509-parser.
+		let (_, x509_cert) = X509Certificate::from_der(&cert_der).unwrap();
+		let (_, x509_csr) = X509CertificationRequest::from_der(&csr_der).unwrap();
+
+		// Helper macro that tests both the parsed cert and CSR have an extension with specific
+		// properties.
+		macro_rules! assert_paired_ext {
+			($oid:ident, $critical:expr, $pattern:pat, $parsed_expr:expr) => {{
+				// 1. Find the extension in the certificate.
+				let cert_ext = x509_cert
+					.get_extension_unique(&x509_parser::oid_registry::$oid)
+					.expect(concat!("malformed cert ext for ", stringify!($oid)))
+					.expect(concat!("missing cert ext for ", stringify!($oid)));
+
+				// 2. Verify criticality.
+				assert_eq!(
+					cert_ext.critical, $critical,
+					concat!("wrong criticality for ", stringify!($oid))
+				);
+
+				// 3. Verify the parsed representation of the extension.
+				match cert_ext.parsed_extension() {
+					$pattern => $parsed_expr,
+					_ => panic!(concat!(
+						"unexpected parsed extension for ",
+						stringify!($oid)
+					)),
+				};
+
+				// 4. Verify the parsed CSR has the extension, and that it has the correct
+				//    parsed representation.
+				x509_csr
+					.requested_extensions()
+					.expect("missing CSR requested extensions")
+					.find_map(|ext| match ext {
+						$pattern => Some($parsed_expr),
+						_ => None,
+					})
+					.expect(concat!("missing CSR extension for ", stringify!($oid)))
+			}};
+		}
+
+		assert_paired_ext!(
+			OID_X509_EXT_SUBJECT_ALT_NAME,
+			false,
+			ParsedExtension::SubjectAlternativeName(san),
+			{
+				san.general_names
+					.iter()
+					.find(|name| match name {
+						x509_parser::prelude::GeneralName::DNSName(name) => name == &san_name,
+						_ => false,
+					})
+					.expect("missing expected SAN");
+			}
+		);
+
+		assert_paired_ext!(
+			OID_X509_EXT_BASIC_CONSTRAINTS,
+			true,
+			ParsedExtension::BasicConstraints(bc),
+			{
+				assert!(bc.ca);
+				assert_eq!(
+					bc.path_len_constraint.expect("missing path len constraint"),
+					path_len_constraint as u32
+				);
+			}
+		);
+
+		fn assert_subtree_dns(
+			subtrees: Vec<x509_parser::prelude::GeneralSubtree>,
+			expected_dns: &str,
+		) {
+			subtrees
+				.iter()
+				.find(
+					|subtree|
+						matches!(subtree.base, x509_parser::prelude::GeneralName::DNSName(dns) if dns == expected_dns)
+				)
+				.expect("missing expected subtree URI");
+		}
+		assert_paired_ext!(
+			OID_X509_EXT_NAME_CONSTRAINTS,
+			true,
+			ParsedExtension::NameConstraints(name_constraints),
+			{
+				assert_subtree_dns(
+					name_constraints
+						.permitted_subtrees
+						.clone()
+						.expect("missing permitted subtrees"),
+					&permitted_subtree_dns,
+				);
+				assert_subtree_dns(
+					name_constraints
+						.excluded_subtrees
+						.clone()
+						.expect("missing excluded subtrees"),
+					&excluded_subtree_dns,
+				);
+			}
+		);
+
+		fn assert_crl_dps_uri(
+			crl_dps: &x509_parser::prelude::CRLDistributionPoints,
+			expected: &str,
+		) {
+			crl_dps
+				.iter()
+				.find(|dp| {
+					let full_names = match dp
+						.distribution_point
+						.clone()
+						.expect("missing distribution point name")
+					{
+						x509_parser::prelude::DistributionPointName::FullName(full_names) => {
+							full_names
+						},
+						_ => panic!("missing full names"),
+					};
+
+					full_names.iter().find(|general_name|
+						matches!(general_name, x509_parser::prelude::GeneralName::URI(uri) if uri == &expected)).is_some()
+				})
+				.expect("missing expected CRL distribution point URI");
+		}
+		assert_paired_ext!(
+			OID_X509_EXT_CRL_DISTRIBUTION_POINTS,
+			false,
+			ParsedExtension::CRLDistributionPoints(crl_dps),
+			assert_crl_dps_uri(crl_dps, &distribution_point_uri)
+		);
+
+		assert_paired_ext!(
+			OID_X509_EXT_KEY_USAGE,
+			true,
+			ParsedExtension::KeyUsage(ku),
+			{
+				assert!(ku.digital_signature());
+				assert!(ku.key_encipherment());
+				assert!(!ku.non_repudiation());
+				assert!(!ku.key_agreement());
+				assert!(!ku.key_cert_sign());
+				assert!(!ku.encipher_only());
+				assert!(!ku.decipher_only());
+			}
+		);
+
+		assert_paired_ext!(
+			OID_X509_EXT_EXTENDED_KEY_USAGE,
+			false,
+			ParsedExtension::ExtendedKeyUsage(eku),
+			{
+				assert!(eku.server_auth);
+				assert!(eku.client_auth);
+				assert!(!eku.any);
+				assert!(eku.other.is_empty());
+				assert!(!eku.code_signing);
+				assert!(!eku.ocsp_signing);
+				assert!(!eku.email_protection);
+				assert!(!eku.time_stamping);
+			}
+		);
+
+		assert_paired_ext!(
+			OID_X509_EXT_SUBJECT_KEY_IDENTIFIER,
+			false,
+			ParsedExtension::SubjectKeyIdentifier(ski),
+			assert_eq!(ski.0, &cert.get_key_identifier())
+		);
+
+		// We should find the AKI extension in the self-signed certificate.
+		let aki = x509_cert
+			.get_extension_unique(&x509_parser::oid_registry::OID_X509_EXT_AUTHORITY_KEY_IDENTIFIER)
+			.expect("malformed OID_X509_EXT_AUTHORITY_KEY_IDENTIFIER")
+			.expect("missing OID_X509_EXT_AUTHORITY_KEY_IDENTIFIER");
+		assert!(!aki.critical);
+		match aki.parsed_extension() {
+			ParsedExtension::AuthorityKeyIdentifier(aki) => assert_eq!(
+				aki.clone()
+					.key_identifier
+					.expect("missing key identifier")
+					.0,
+				&cert.get_key_identifier()
+			),
+			_ => panic!("unexpected parsed extension type"),
+		};
+
+		// We should not find the AKI extension in the CSR. That's provided by an issuer
+		// when issuing the certificate.
+		assert_eq!(
+			x509_csr
+				.requested_extensions()
+				.unwrap()
+				.find(|ext| { matches!(ext, ParsedExtension::AuthorityKeyIdentifier(_)) }),
+			None
+		);
+	}
+}
+
+#[cfg(feature = "x509-parser")]
 mod test_x509_custom_ext {
 	use crate::util;
 
