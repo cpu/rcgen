@@ -254,7 +254,7 @@ impl CertificateRevocationListParams {
 					// TODO: have the Extensions type write the outer sequence and each
 					// 		 contained extension once we've ported each of the below
 					//       extensions to self.extensions().
-					for ext in self.extensions(Some(ca)).iter() {
+					for ext in self.extensions(ca).iter() {
 						ext.write_der(writer.next());
 					}
 				});
@@ -265,16 +265,18 @@ impl CertificateRevocationListParams {
 	}
 	/// Returns the X.509 extensions that the [CertificateRevocationListParams] describe.
 	///
-	/// If an issuer [Certificate] is provided, additional extensions specific to the issuer will
-	/// be included (e.g. the authority key identifier).
-	fn extensions(&self, issuer: Option<&Certificate>) -> Extensions {
+	/// Additional extensions specific to the issuer [Certificate] will also be included
+	/// (e.g. the authority key identifier).
+	fn extensions(&self, issuer: &Certificate) -> Extensions {
 		let mut exts = Extensions::default();
 
-		if let Some(issuer) = issuer {
-			// Safety: `exts` is empty at this point - there can be no duplicate AKI ext OID.
-			exts.add_extension(ext::authority_key_identifier(issuer))
-				.unwrap();
-		}
+		// RFC 5280 §5.2:
+		//   Conforming CRL issuers are REQUIRED to include the authority key
+		//   identifier (Section 5.2.1) and the CRL number (Section 5.2.3)
+		//   extensions in all CRLs issued.
+		// Safety: `exts` is empty at this point - there can be no duplicate AKI ext OID.
+		exts.add_extension(ext::authority_key_identifier(issuer))
+			.unwrap();
 
 		// Safety: there can be no duplicate CRL number ext OID.
 		exts.add_extension(ext::crl_number(&self.crl_number))
