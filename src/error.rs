@@ -38,6 +38,9 @@ pub enum Error {
 	RingUnspecified,
 	/// Time conversion related errors
 	Time,
+	/// Unsupported basic constraints extension path length in CSR
+	#[cfg(feature = "x509-parser")]
+	UnsupportedBasicConstraintsPathLen,
 	/// Unsupported extension requested in CSR
 	#[cfg(feature = "x509-parser")]
 	UnsupportedExtension,
@@ -96,6 +99,11 @@ impl fmt::Display for Error {
 			DuplicateExtension(oid) => {
 				write!(f, "Extension with OID {oid} present multiple times")?
 			},
+			#[cfg(feature = "x509-parser")]
+			UnsupportedBasicConstraintsPathLen => write!(
+				f,
+				"Unsupported basic constraints extension path length constraint in CSR"
+			)?,
 		};
 		Ok(())
 	}

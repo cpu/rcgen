@@ -1,5 +1,5 @@
 #[cfg(feature = "x509-parser")]
-use crate::{CustomExtension, DistinguishedName, SanType};
+use crate::{BasicConstraints, CustomExtension, DistinguishedName, IsCa, SanType};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use std::hash::Hash;
@@ -100,6 +100,20 @@ impl CertificateSigningRequest {
 						params.key_identifier = ski.0.to_vec();
 						true
 					},
+					x509_parser::extensions::ParsedExtension::BasicConstraints(bc) => {
+						params.is_ca = match (bc.ca, bc.path_len_constraint) {
+							(false, _) => IsCa::ExplicitNoCa,
+							(true, None) => IsCa::Ca(BasicConstraints::Unconstrained),
+							(true, Some(len_constraint)) => {
+								IsCa::Ca(BasicConstraints::Constrained(
+									len_constraint
+										.try_into()
+										.map_err(|_| Error::UnsupportedBasicConstraintsPathLen)?,
+								))
+							},
+						};
+						true
+					},
 					_ => false,
 				};
 				if !supported {
@@ -113,7 +127,6 @@ impl CertificateSigningRequest {
 		}
 
 		// Not yet handled:
-		// * is_ca
 		// * extended_key_usages
 		// * name_constraints
 		// and any other extensions.
