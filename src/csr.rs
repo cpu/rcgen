@@ -1,5 +1,7 @@
 #[cfg(feature = "x509-parser")]
-use crate::{BasicConstraints, CustomExtension, DistinguishedName, IsCa, SanType};
+use crate::{
+	BasicConstraints, CustomExtension, DistinguishedName, ExtendedKeyUsagePurpose, IsCa, SanType,
+};
 #[cfg(feature = "pem")]
 use pem::Pem;
 use std::hash::Hash;
@@ -114,6 +116,32 @@ impl CertificateSigningRequest {
 						};
 						true
 					},
+					x509_parser::extensions::ParsedExtension::ExtendedKeyUsage(eku) => {
+						let mut usages = Vec::default();
+						if eku.any {
+							usages.push(ExtendedKeyUsagePurpose::Any);
+						}
+						if eku.server_auth {
+							usages.push(ExtendedKeyUsagePurpose::ServerAuth);
+						}
+						if eku.client_auth {
+							usages.push(ExtendedKeyUsagePurpose::ClientAuth);
+						}
+						if eku.code_signing {
+							usages.push(ExtendedKeyUsagePurpose::CodeSigning);
+						}
+						if eku.email_protection {
+							usages.push(ExtendedKeyUsagePurpose::EmailProtection);
+						}
+						if eku.time_stamping {
+							usages.push(ExtendedKeyUsagePurpose::TimeStamping);
+						}
+						if eku.ocsp_signing {
+							usages.push(ExtendedKeyUsagePurpose::EmailProtection);
+						}
+						params.extended_key_usages = usages;
+						true
+					},
 					_ => false,
 				};
 				if !supported {
@@ -127,7 +155,6 @@ impl CertificateSigningRequest {
 		}
 
 		// Not yet handled:
-		// * extended_key_usages
 		// * name_constraints
 		// and any other extensions.
 
