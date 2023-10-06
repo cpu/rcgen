@@ -44,6 +44,9 @@ pub enum Error {
 	/// Unsupported extension requested in CSR
 	#[cfg(feature = "x509-parser")]
 	UnsupportedExtension,
+	/// Unsupported general name type in CSR
+	#[cfg(feature = "x509-parser")]
+	UnsupportedGeneralName,
 	/// Unsupported field when generating a CSR
 	UnsupportedInCsr,
 	/// The requested signature algorithm is not supported
@@ -104,6 +107,8 @@ impl fmt::Display for Error {
 				f,
 				"Unsupported basic constraints extension path length constraint in CSR"
 			)?,
+			#[cfg(feature = "x509-parser")]
+			UnsupportedGeneralName => write!(f, "Unsupported general name in CSR",)?,
 		};
 		Ok(())
 	}

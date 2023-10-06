@@ -220,6 +220,24 @@ impl GeneralSubtree {
 			GeneralSubtree::IpAddress(_addr) => TAG_IP_ADDRESS,
 		}
 	}
+
+	#[cfg(feature = "x509-parser")]
+	pub(crate) fn from_x509_general_subtree(
+		general_subtree: &x509_parser::extensions::GeneralSubtree,
+	) -> Result<Self, Error> {
+		use x509_parser::extensions::GeneralName as X509GeneralName;
+		match &general_subtree.base {
+			X509GeneralName::RFC822Name(name) => Ok(GeneralSubtree::Rfc822Name(name.to_string())),
+			X509GeneralName::DNSName(name) => Ok(GeneralSubtree::DnsName(name.to_string())),
+			X509GeneralName::DirectoryName(name) => Ok(GeneralSubtree::DirectoryName(
+				DistinguishedName::from_name(name)?,
+			)),
+			// TODO(XXX): Consider how to handle the &[u8] that x509_parser provides.
+			//            It would need to be mapped into the rcgen CidrSubnet type.
+			// GeneralName::IPAddress(addr) => GeneralSubtree::IpAddress(...)
+			_ => Err(Error::UnsupportedGeneralName),
+		}
+	}
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

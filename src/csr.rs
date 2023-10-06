@@ -1,6 +1,7 @@
 #[cfg(feature = "x509-parser")]
 use crate::{
-	BasicConstraints, CustomExtension, DistinguishedName, ExtendedKeyUsagePurpose, IsCa, SanType,
+	BasicConstraints, CustomExtension, DistinguishedName, ExtendedKeyUsagePurpose, GeneralSubtree,
+	IsCa, NameConstraints, SanType,
 };
 #[cfg(feature = "pem")]
 use pem::Pem;
@@ -142,6 +143,29 @@ impl CertificateSigningRequest {
 						params.extended_key_usages = usages;
 						true
 					},
+					x509_parser::extensions::ParsedExtension::NameConstraints(ncs) => {
+						let mut permitted_subtrees = Vec::default();
+						if let Some(ncs_permitted) = &ncs.permitted_subtrees {
+							permitted_subtrees = ncs_permitted
+								.iter()
+								.map(GeneralSubtree::from_x509_general_subtree)
+								.collect::<Result<Vec<_>, _>>()?;
+						}
+						let mut excluded_subtrees = Vec::default();
+						if let Some(ncs_excluded) = &ncs.excluded_subtrees {
+							excluded_subtrees = ncs_excluded
+								.iter()
+								.map(GeneralSubtree::from_x509_general_subtree)
+								.collect::<Result<Vec<_>, _>>()?;
+						}
+						if !permitted_subtrees.is_empty() || !excluded_subtrees.is_empty() {
+							params.name_constraints = Some(NameConstraints {
+								permitted_subtrees,
+								excluded_subtrees,
+							});
+						}
+						true
+					},
 					_ => false,
 				};
 				if !supported {
@@ -153,10 +177,6 @@ impl CertificateSigningRequest {
 				}
 			}
 		}
-
-		// Not yet handled:
-		// * name_constraints
-		// and any other extensions.
 
 		Ok(Self {
 			params,
