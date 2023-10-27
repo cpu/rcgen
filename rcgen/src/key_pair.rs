@@ -179,7 +179,8 @@ impl KeyPair {
 
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
-				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)?;
+				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)
+					.map_err(|_| Error::RingUnspecified)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair =
@@ -191,7 +192,8 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)?;
+				let key_pair_doc =
+					Ed25519KeyPair::generate_pkcs8(rng).map_err(|_| Error::RingUnspecified)?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
@@ -232,7 +234,9 @@ impl KeyPair {
 		match &self.kind {
 			KeyPairKind::Ec(kp) => {
 				let system_random = SystemRandom::new();
-				let signature = kp.sign(&system_random, msg)?;
+				let signature = kp
+					.sign(&system_random, msg)
+					.map_err(|_| Error::RingUnspecified)?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -244,7 +248,8 @@ impl KeyPair {
 			KeyPairKind::Rsa(kp, padding_alg) => {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public().modulus_len()];
-				kp.sign(*padding_alg, &system_random, msg, &mut signature)?;
+				kp.sign(*padding_alg, &system_random, msg, &mut signature)
+					.map_err(|_| Error::RingUnspecified)?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
