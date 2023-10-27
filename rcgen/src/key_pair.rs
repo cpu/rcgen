@@ -112,30 +112,30 @@ impl KeyPair {
 		let pkcs8_vec = pkcs8.to_vec();
 
 		let kind = if alg == &PKCS_ED25519 {
-			KeyPairKind::Ed(Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)?)
+			KeyPairKind::Ed(
+				Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8).map_err(key_rejected_err)?,
+			)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P256_SHA256_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)
+					.map_err(key_rejected_err)?,
+			)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
-			KeyPairKind::Ec(EcdsaKeyPair::from_pkcs8(
-				&signature::ECDSA_P384_SHA384_ASN1_SIGNING,
-				pkcs8,
-				rng,
-			)?)
+			KeyPairKind::Ec(
+				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)
+					.map_err(key_rejected_err)?,
+			)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -369,6 +369,10 @@ pub trait RemoteKeyPair {
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
+}
+
+pub(crate) fn key_rejected_err(err: ring::error::KeyRejected) -> Error {
+	Error::RingKeyRejected(err.to_string())
 }
 
 pub(crate) trait PublicKeyData {
