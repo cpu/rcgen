@@ -113,29 +113,30 @@ impl KeyPair {
 
 		let kind = if alg == &PKCS_ED25519 {
 			KeyPairKind::Ed(
-				Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8).map_err(key_rejected_err)?,
+				Ed25519KeyPair::from_pkcs8_maybe_unchecked(pkcs8)
+					.map_err(|e| Error::Ring(e.to_string()))?,
 			)
 		} else if alg == &PKCS_ECDSA_P256_SHA256 {
 			KeyPairKind::Ec(
 				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P256_SHA256_ASN1_SIGNING, pkcs8, rng)
-					.map_err(key_rejected_err)?,
+					.map_err(|e| Error::Ring(e.to_string()))?,
 			)
 		} else if alg == &PKCS_ECDSA_P384_SHA384 {
 			KeyPairKind::Ec(
 				EcdsaKeyPair::from_pkcs8(&signature::ECDSA_P384_SHA384_ASN1_SIGNING, pkcs8, rng)
-					.map_err(key_rejected_err)?,
+					.map_err(|e| Error::Ring(e.to_string()))?,
 			)
 		} else if alg == &PKCS_RSA_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(|e| Error::Ring(e.to_string()))?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA256)
 		} else if alg == &PKCS_RSA_SHA384 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(|e| Error::Ring(e.to_string()))?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA384)
 		} else if alg == &PKCS_RSA_SHA512 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(|e| Error::Ring(e.to_string()))?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PKCS1_SHA512)
 		} else if alg == &PKCS_RSA_PSS_SHA256 {
-			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(key_rejected_err)?;
+			let rsakp = RsaKeyPair::from_pkcs8(pkcs8).map_err(|e| Error::Ring(e.to_string()))?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
 			panic!("Unknown SignatureAlgorithm specified!");
@@ -180,7 +181,7 @@ impl KeyPair {
 		match alg.sign_alg {
 			SignAlgo::EcDsa(sign_alg) => {
 				let key_pair_doc = EcdsaKeyPair::generate_pkcs8(sign_alg, rng)
-					.map_err(|_| Error::RingUnspecified)?;
+					.map_err(|_| Error::Ring("Unspecified error".into()))?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair =
@@ -192,8 +193,8 @@ impl KeyPair {
 				})
 			},
 			SignAlgo::EdDsa(_sign_alg) => {
-				let key_pair_doc =
-					Ed25519KeyPair::generate_pkcs8(rng).map_err(|_| Error::RingUnspecified)?;
+				let key_pair_doc = Ed25519KeyPair::generate_pkcs8(rng)
+					.map_err(|_| Error::Ring("Unspecified error".into()))?;
 				let key_pair_serialized = key_pair_doc.as_ref().to_vec();
 
 				let key_pair = Ed25519KeyPair::from_pkcs8(&&key_pair_doc.as_ref()).unwrap();
@@ -236,7 +237,7 @@ impl KeyPair {
 				let system_random = SystemRandom::new();
 				let signature = kp
 					.sign(&system_random, msg)
-					.map_err(|_| Error::RingUnspecified)?;
+					.map_err(|_| Error::Ring("Unspecified error".into()))?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -249,7 +250,7 @@ impl KeyPair {
 				let system_random = SystemRandom::new();
 				let mut signature = vec![0; kp.public().modulus_len()];
 				kp.sign(*padding_alg, &system_random, msg, &mut signature)
-					.map_err(|_| Error::RingUnspecified)?;
+					.map_err(|_| Error::Ring("Unspecified error".into()))?;
 				let sig = &signature.as_ref();
 				writer.write_bitvec_bytes(&sig, &sig.len() * 8);
 			},
@@ -374,10 +375,6 @@ pub trait RemoteKeyPair {
 
 	/// Reveals the algorithm to be used when calling `sign()`
 	fn algorithm(&self) -> &'static SignatureAlgorithm;
-}
-
-pub(crate) fn key_rejected_err(err: ring::error::KeyRejected) -> Error {
-	Error::RingKeyRejected(err.to_string())
 }
 
 pub(crate) trait PublicKeyData {

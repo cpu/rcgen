@@ -23,10 +23,8 @@ pub enum Error {
 	UnsupportedExtension,
 	/// The requested signature algorithm is not supported
 	UnsupportedSignatureAlgorithm,
-	/// Unspecified `ring` error
-	RingUnspecified,
-	/// The `ring` library rejected the key upon loading
-	RingKeyRejected(String),
+	/// An error from the `ring` library was encountered
+	Ring(String),
 	/// The provided certificate's signature algorithm
 	/// is incompatible with the given key pair
 	CertificateKeyPairMismatch,
@@ -73,8 +71,7 @@ impl fmt::Display for Error {
 			)?,
 			#[cfg(feature = "x509-parser")]
 			UnsupportedExtension => write!(f, "Unsupported extension requested in CSR")?,
-			RingUnspecified => write!(f, "Unspecified ring error")?,
-			RingKeyRejected(e) => write!(f, "Key rejected by ring: {}", e)?,
+			Ring(e) => write!(f, "Error from *ring*: {}", e)?,
 			CertificateKeyPairMismatch => write!(
 				f,
 				"The provided certificate's signature \

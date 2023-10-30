@@ -327,7 +327,7 @@ fn from_remote() {
 			self.0
 				.sign(&system_random, msg)
 				.map(|s| s.as_ref().to_owned())
-				.map_err(|_| Error::RingUnspecified)
+				.map_err(|e| Error::Ring(e.to_string()))
 		}
 
 		fn algorithm(&self) -> &'static rcgen::SignatureAlgorithm {
