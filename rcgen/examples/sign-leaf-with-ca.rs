@@ -4,7 +4,7 @@ use rcgen::{
 };
 use time::{Duration, OffsetDateTime};
 
-/// Example demonstrating signing end-endity certificate with ca
+/// Example demonstrating signing end-entity certificate with ca
 fn main() {
 	let ca = new_ca();
 	let end_entity = new_end_entity();
@@ -45,6 +45,9 @@ fn new_end_entity() -> Certificate {
 	params
 		.extended_key_usages
 		.push(ExtendedKeyUsagePurpose::ServerAuth);
+	params
+		.extended_key_usages
+		.push(ExtendedKeyUsagePurpose::ClientAuth);
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
 	Certificate::from_params(params).unwrap()
