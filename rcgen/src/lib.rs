@@ -1503,13 +1503,7 @@ impl Certificate {
 	/// generate it, set the [`CertificateParams::key_pair`] field ahead of time before calling
 	/// this function.
 	pub fn generate_self_signed(mut params: CertificateParams) -> Result<Self, Error> {
-		let key_pair = match params.key_pair.take() {
-			None => KeyPair::generate(&params.alg)?,
-			Some(kp) if !kp.is_compatible(&params.alg) => {
-				return Err(Error::CertificateKeyPairMismatch)
-			},
-			Some(kp) => kp,
-		};
+		let key_pair = Self::prepare_key_pair(&mut params.key_pair, params.alg)?;
 		let der = params.serialize_der_with_signer(
 			&key_pair,
 			params.alg,
@@ -1528,13 +1522,7 @@ impl Certificate {
 	/// generate it, set the [`CertificateParams::key_pair`] field ahead of time before calling
 	/// this function.
 	pub fn generate(mut params: CertificateParams, issuer: &Certificate) -> Result<Self, Error> {
-		let key_pair = match params.key_pair.take() {
-			None => KeyPair::generate(&params.alg)?,
-			Some(kp) if !kp.is_compatible(&params.alg) => {
-				return Err(Error::CertificateKeyPairMismatch)
-			},
-			Some(kp) => kp,
-		};
+		let key_pair = Self::prepare_key_pair(&mut params.key_pair, params.alg)?;
 		let der = params.serialize_der_with_signer(
 			&key_pair,
 			&issuer.params.alg,
@@ -1607,6 +1595,24 @@ impl Certificate {
 	#[cfg(feature = "pem")]
 	pub fn private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
+	}
+
+	/// Return a subject [`KeyPair`] to use for the [`CertificateParams`].
+	///
+	/// If `params` do not specify a [`KeyPair`], a new one is generated.
+	/// If `params` specifies a [`KeyPair`], that isn't compatible with the signature
+	/// algorithm specified, an error is returned.
+	fn prepare_key_pair(
+		key_pair: &mut Option<KeyPair>,
+		sig_alg: &'static SignatureAlgorithm,
+	) -> Result<KeyPair, Error> {
+		match key_pair.take() {
+			None => KeyPair::generate(sig_alg),
+			Some(kp) if !kp.is_compatible(sig_alg) => {
+				return Err(Error::CertificateKeyPairMismatch)
+			},
+			Some(kp) => Ok(kp),
+		}
 	}
 }
 
