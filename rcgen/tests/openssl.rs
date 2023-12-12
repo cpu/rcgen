@@ -91,7 +91,7 @@ impl Read for PipeEnd {
 
 fn verify_cert(cert: &Certificate) {
 	verify_cert_basic(cert);
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 	verify_cert_ca(&cert.pem(), &key, &cert.pem());
 }
 
@@ -163,7 +163,7 @@ fn verify_cert_ca(cert_pem: &str, key: &[u8], ca_cert_pem: &str) {
 fn verify_csr(cert: &Certificate) {
 	let csr = cert.serialize_request_pem().unwrap();
 	println!("{csr}");
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 	let pkey = PKey::private_key_from_der(&key).unwrap();
 
 	let req = X509Req::from_pem(csr.as_bytes()).unwrap();
@@ -325,7 +325,7 @@ fn test_openssl_separate_ca() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::generate(params, &ca_cert).unwrap();
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert_pem);
 }
@@ -348,7 +348,7 @@ fn test_openssl_separate_ca_with_printable_string() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::generate(params, &ca_cert).unwrap();
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
 }
@@ -369,7 +369,7 @@ fn test_openssl_separate_ca_with_other_signing_alg() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::generate(params, &ca_cert).unwrap();
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
 }
@@ -398,7 +398,7 @@ fn test_openssl_separate_ca_name_constraints() {
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
 	let cert = Certificate::generate(params, &ca_cert).unwrap();
-	let key = cert.serialize_private_key_der();
+	let key = cert.private_key_der();
 
 	verify_cert_ca(&cert.pem(), &key, &ca_cert.pem());
 }

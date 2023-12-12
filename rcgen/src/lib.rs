@@ -23,7 +23,7 @@ let subject_alt_names = vec!["hello.world.example".to_string(),
 
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", cert.serialize_private_key_pem());
+println!("{}", cert.private_key_pem());
 # }
 ```"##
 )]
@@ -99,7 +99,7 @@ let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 let cert = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
-println!("{}", cert.serialize_private_key_pem());
+println!("{}", cert.private_key_pem());
 # }
 ```
 "##
@@ -1598,14 +1598,14 @@ impl Certificate {
 	/// Serializes the private key in PKCS#8 format
 	///
 	/// Panics if called on a remote key pair.
-	pub fn serialize_private_key_der(&self) -> Vec<u8> {
+	pub fn private_key_der(&self) -> Vec<u8> {
 		self.key_pair.serialize_der()
 	}
 	/// Serializes the private key in PEM format
 	///
 	/// Panics if called on a remote key pair.
 	#[cfg(feature = "pem")]
-	pub fn serialize_private_key_pem(&self) -> String {
+	pub fn private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
 	}
 }

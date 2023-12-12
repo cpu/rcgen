@@ -159,7 +159,7 @@ fn test_botan_imported_ca() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.private_key_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =
@@ -192,7 +192,7 @@ fn test_botan_imported_ca_with_printable_string() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.private_key_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =

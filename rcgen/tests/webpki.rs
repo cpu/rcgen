@@ -24,7 +24,7 @@ use time::{Duration, OffsetDateTime};
 mod util;
 
 fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgorithm) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+	let pk_der = cert.private_key_der();
 	let key_pair =
 		EcdsaKeyPair::from_pkcs8(alg, &pk_der, &ring::rand::SystemRandom::new()).unwrap();
 	let system_random = SystemRandom::new();
@@ -33,7 +33,7 @@ fn sign_msg_ecdsa(cert: &Certificate, msg: &[u8], alg: &'static EcdsaSigningAlgo
 }
 
 fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+	let pk_der = cert.private_key_der();
 	let key_pair = Ed25519KeyPair::from_pkcs8_maybe_unchecked(&pk_der).unwrap();
 	let signature = key_pair.sign(msg);
 	signature.as_ref().to_vec()
@@ -41,7 +41,7 @@ fn sign_msg_ed25519(cert: &Certificate, msg: &[u8]) -> Vec<u8> {
 
 #[cfg(feature = "pem")]
 fn sign_msg_rsa(cert: &Certificate, msg: &[u8], encoding: &'static dyn RsaEncoding) -> Vec<u8> {
-	let pk_der = cert.serialize_private_key_der();
+	let pk_der = cert.private_key_der();
 	let key_pair = RsaKeyPair::from_pkcs8(&pk_der).unwrap();
 	let system_random = SystemRandom::new();
 	let mut signature = vec![0; key_pair.public().modulus_len()];
@@ -387,7 +387,7 @@ fn test_webpki_imported_ca() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.private_key_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =
@@ -426,7 +426,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = Certificate::generate_self_signed(params).unwrap();
 
-	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.serialize_private_key_der());
+	let (ca_cert_der, ca_key_der) = (ca_cert.der(), ca_cert.private_key_der());
 
 	let ca_key_pair = ca_key_der.as_slice().try_into().unwrap();
 	let imported_ca_cert_params =
