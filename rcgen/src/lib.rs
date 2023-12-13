@@ -1501,15 +1501,7 @@ impl Certificate {
 	/// If you want to control the [`KeyPair`] or the randomness used to generate it, set the [`CertificateParams::key_pair`]
 	/// field ahead of time before calling this function.
 	pub fn from_params(mut params: CertificateParams) -> Result<Self, Error> {
-		let key_pair = if let Some(key_pair) = params.key_pair.take() {
-			if !key_pair.is_compatible(&params.alg) {
-				return Err(Error::CertificateKeyPairMismatch);
-			}
-			key_pair
-		} else {
-			KeyPair::generate(&params.alg)?
-		};
-
+		let key_pair = Self::prepare_key_pair(&mut params.key_pair, params.alg)?;
 		Ok(Certificate { params, key_pair })
 	}
 	/// Returns the certificate parameters
@@ -1590,6 +1582,24 @@ impl Certificate {
 	#[cfg(feature = "pem")]
 	pub fn serialize_private_key_pem(&self) -> String {
 		self.key_pair.serialize_pem()
+	}
+
+	/// Return a subject [`KeyPair`] to use for the [`CertificateParams`].
+	///
+	/// If `params` do not specify a [`KeyPair`], a new one is generated.
+	/// If `params` specifies a [`KeyPair`], that isn't compatible with the signature
+	/// algorithm specified, an error is returned.
+	fn prepare_key_pair(
+		key_pair: &mut Option<KeyPair>,
+		sig_alg: &'static SignatureAlgorithm,
+	) -> Result<KeyPair, Error> {
+		match key_pair.take() {
+			None => KeyPair::generate(sig_alg),
+			Some(kp) if !kp.is_compatible(sig_alg) => {
+				return Err(Error::CertificateKeyPairMismatch)
+			},
+			Some(kp) => Ok(kp),
+		}
 	}
 }
 
