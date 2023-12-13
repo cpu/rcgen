@@ -21,9 +21,9 @@ use rcgen::generate_simple_self_signed;
 let subject_alt_names = vec!["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names).unwrap();
+let (cert, key_pair) = generate_simple_self_signed(subject_alt_names).unwrap();
 println!("{}", cert.pem());
-println!("{}", cert.serialize_private_key_pem());
+println!("{}", key_pair.serialize_pem());
 # }
 ```"##
 )]
@@ -72,7 +72,6 @@ pub type RcgenError = Error;
 /// An issued certificate together with a subject keypair.
 pub struct Certificate {
 	params: CertificateParams,
-	key_pair: KeyPair,
 	spki: Vec<u8>,
 	der: Vec<u8>,
 }
@@ -97,17 +96,17 @@ use rcgen::generate_simple_self_signed;
 let subject_alt_names :&[_] = &["hello.world.example".to_string(),
 	"localhost".to_string()];
 
-let cert = generate_simple_self_signed(subject_alt_names).unwrap();
+let (cert, key_pair) = generate_simple_self_signed(subject_alt_names).unwrap();
 // The certificate is now valid for localhost and the domain "hello.world.example"
 println!("{}", cert.pem());
-println!("{}", cert.serialize_private_key_pem());
+println!("{}", key_pair.serialize_pem());
 # }
 ```
 "##
 )]
 pub fn generate_simple_self_signed(
 	subject_alt_names: impl Into<Vec<String>>,
-) -> Result<Certificate, Error> {
+) -> Result<(Certificate, KeyPair), Error> {
 	Certificate::generate_self_signed(CertificateParams::new(subject_alt_names))
 }
 
@@ -1504,7 +1503,7 @@ impl Certificate {
 	/// If you want to control the certificate subject [`KeyPair`] or the randomness used to
 	/// generate it, set the [`CertificateParams::key_pair`] field ahead of time before calling
 	/// this function.
-	pub fn generate_self_signed(mut params: CertificateParams) -> Result<Self, Error> {
+	pub fn generate_self_signed(mut params: CertificateParams) -> Result<(Self, KeyPair), Error> {
 		let key_pair = Self::prepare_key_pair(&mut params.key_pair, params.alg)?;
 		let spki = key_pair.public_key_der();
 		let der = params.serialize_der_with_signer(
@@ -1513,33 +1512,27 @@ impl Certificate {
 			&key_pair,
 			&params.distinguished_name,
 		)?;
-		Ok(Certificate {
-			params,
-			key_pair,
-			spki,
-			der,
-		})
+		Ok((Certificate { params, spki, der }, key_pair))
 	}
 	/// Generate a new certificate from the given parameters, signed by the provided issuer.
 	///
 	/// If you want to control the certificate subject [`KeyPair`] or the randomness used to
 	/// generate it, set the [`CertificateParams::key_pair`] field ahead of time before calling
 	/// this function.
-	pub fn generate(mut params: CertificateParams, issuer: &Certificate) -> Result<Self, Error> {
+	pub fn generate(
+		mut params: CertificateParams,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
+	) -> Result<(Self, KeyPair), Error> {
 		let key_pair = Self::prepare_key_pair(&mut params.key_pair, params.alg)?;
 		let spki = key_pair.public_key_der();
 		let der = params.serialize_der_with_signer(
 			&key_pair,
 			&issuer.params.alg,
-			&issuer.key_pair,
+			issuer_key,
 			&issuer.params.distinguished_name,
 		)?;
-		Ok(Certificate {
-			params,
-			key_pair,
-			spki,
-			der,
-		})
+		Ok((Certificate { params, spki, der }, key_pair))
 	}
 	/// Returns the certificate parameters
 	pub fn get_params(&self) -> &CertificateParams {
@@ -1560,11 +1553,11 @@ impl Certificate {
 		pem::encode_config(&Pem::new("CERTIFICATE", self.der()), ENCODE_CONFIG)
 	}
 	/// Serializes a certificate signing request in binary DER format
-	pub fn serialize_request_der(&self) -> Result<Vec<u8>, Error> {
+	pub fn serialize_request_der(&self, subject_key: &KeyPair) -> Result<Vec<u8>, Error> {
 		yasna::try_construct_der(|writer| {
 			writer.write_sequence(|writer| {
 				let cert_data = yasna::try_construct_der(|writer| {
-					self.params.write_request(&self.key_pair, writer)
+					self.params.write_request(subject_key, writer)
 				})?;
 				writer.next().write_der(&cert_data);
 
@@ -1572,37 +1565,19 @@ impl Certificate {
 				self.params.alg.write_alg_ident(writer.next());
 
 				// Write signature
-				self.key_pair.sign(&cert_data, writer.next())?;
+				subject_key.sign(&cert_data, writer.next())?;
 
 				Ok(())
 			})
 		})
 	}
-	/// Return the certificate's key pair
-	pub fn get_key_pair(&self) -> &KeyPair {
-		&self.key_pair
-	}
 	/// Serializes the certificate signing request to the ASCII PEM format
 	#[cfg(feature = "pem")]
-	pub fn serialize_request_pem(&self) -> Result<String, Error> {
-		let contents = self.serialize_request_der()?;
+	pub fn serialize_request_pem(&self, subject_key: &KeyPair) -> Result<String, Error> {
+		let contents = self.serialize_request_der(subject_key)?;
 		let p = Pem::new("CERTIFICATE REQUEST", contents);
 		Ok(pem::encode_config(&p, ENCODE_CONFIG))
 	}
-	/// Serializes the private key in PKCS#8 format
-	///
-	/// Panics if called on a remote key pair.
-	pub fn serialize_private_key_der(&self) -> Vec<u8> {
-		self.key_pair.serialize_der()
-	}
-	/// Serializes the private key in PEM format
-	///
-	/// Panics if called on a remote key pair.
-	#[cfg(feature = "pem")]
-	pub fn serialize_private_key_pem(&self) -> String {
-		self.key_pair.serialize_pem()
-	}
-
 	/// Return a subject [`KeyPair`] to use for the [`CertificateParams`].
 	///
 	/// If `params` do not specify a [`KeyPair`], a new one is generated.
@@ -1675,14 +1650,6 @@ fn write_x509_authority_key_identifier(writer: DERWriter, aki: Vec<u8>) {
 impl zeroize::Zeroize for KeyPair {
 	fn zeroize(&mut self) {
 		self.serialized_der.zeroize();
-	}
-}
-
-#[cfg(feature = "zeroize")]
-impl zeroize::Zeroize for Certificate {
-	fn zeroize(&mut self) {
-		self.params.zeroize();
-		self.key_pair.zeroize();
 	}
 }
 
@@ -1811,7 +1778,7 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().0;
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1848,7 +1815,7 @@ mod tests {
 		params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
 
 		// Make the cert
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().0;
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1882,7 +1849,7 @@ mod tests {
 		params.extended_key_usages = vec![ExtendedKeyUsagePurpose::Any];
 
 		// Make the cert
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().0;
 
 		// Parse it
 		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
@@ -1928,7 +1895,9 @@ mod tests {
 		#[test]
 		#[cfg(not(windows))]
 		fn test_not_windows_line_endings() {
-			let cert = Certificate::generate_self_signed(CertificateParams::default()).unwrap();
+			let cert = Certificate::generate_self_signed(CertificateParams::default())
+				.unwrap()
+				.0;
 			assert!(!cert.pem().contains('\r'));
 		}
 	}
@@ -2099,7 +2068,7 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 				params.key_identifier_method
 			);
 
-			let ca_cert = Certificate::generate_self_signed(params).unwrap();
+			let ca_cert = Certificate::generate_self_signed(params).unwrap().0;
 			assert_eq!(&expected_ski, &ca_cert.get_key_identifier());
 
 			let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();

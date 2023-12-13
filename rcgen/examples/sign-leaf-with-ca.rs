@@ -1,12 +1,12 @@
 use rcgen::{
 	BasicConstraints, Certificate, CertificateParams, DnType, DnValue::PrintableString,
-	ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose,
+	ExtendedKeyUsagePurpose, IsCa, KeyPair, KeyUsagePurpose,
 };
 use time::{Duration, OffsetDateTime};
 
 /// Example demonstrating signing end-endity certificate with ca
 fn main() {
-	let ca = new_ca();
+	let (ca, _) = new_ca();
 	let end_entity = new_end_entity();
 
 	let end_entity_pem = end_entity.pem();
@@ -16,7 +16,7 @@ fn main() {
 	println!("ca certificate: {ca_cert_pem}",);
 }
 
-fn new_ca() -> Certificate {
+fn new_ca() -> (Certificate, KeyPair) {
 	let mut params = CertificateParams::new(Vec::default());
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -47,7 +47,7 @@ fn new_end_entity() -> Certificate {
 		.push(ExtendedKeyUsagePurpose::ServerAuth);
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
-	Certificate::generate_self_signed(params).unwrap()
+	Certificate::generate_self_signed(params).unwrap().0
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {

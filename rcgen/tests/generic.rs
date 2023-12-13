@@ -75,7 +75,7 @@ mod test_convert_x509_subject_alternative_name {
 		// Because we're using a function for CA certificates
 		params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let cert = Certificate::generate_self_signed(params).unwrap().0;
 
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let ca_der = cert.der();
@@ -118,7 +118,7 @@ mod test_x509_custom_ext {
 		// Ensure the custom exts. being omitted into a CSR doesn't require SAN ext being present.
 		// See https://github.com/rustls/rcgen/issues/122
 		params.subject_alt_names = Vec::default();
-		let test_cert = Certificate::generate_self_signed(params).unwrap();
+		let (test_cert, test_key) = Certificate::generate_self_signed(params).unwrap();
 		let (_, x509_test_cert) = X509Certificate::from_der(test_cert.der()).unwrap();
 
 		// We should be able to find the extension by OID, with expected criticality and value.
@@ -130,7 +130,7 @@ mod test_x509_custom_ext {
 		assert_eq!(favorite_drink_ext.value, test_ext);
 
 		// Generate a CSR with the custom extension, parse it with x509-parser.
-		let test_cert_csr_der = test_cert.serialize_request_der().unwrap();
+		let test_cert_csr_der = test_cert.serialize_request_der(&test_key).unwrap();
 		let (_, x509_csr) = X509CertificationRequest::from_der(&test_cert_csr_der).unwrap();
 
 		// We should find that the CSR contains requested extensions.
@@ -169,13 +169,13 @@ mod test_x509_parser_crl {
 	#[test]
 	fn parse_crl() {
 		// Create a CRL with one revoked cert, and an issuer to sign the CRL.
-		let (crl, issuer) = util::test_crl();
+		let (crl, issuer, issuer_key) = util::test_crl();
 		let revoked_cert = crl.get_params().revoked_certs.first().unwrap();
 		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
 		let (_, x509_issuer) = X509Certificate::from_der(issuer.der()).unwrap();
 
 		// Serialize the CRL signed by the issuer in DER form.
-		let crl_der = crl.serialize_der_with_signer(&issuer).unwrap();
+		let crl_der = crl.serialize_der_with_signer(&issuer, &issuer_key).unwrap();
 
 		// We should be able to parse the CRL with x509-parser without error.
 		let (_, x509_crl) =
@@ -315,7 +315,7 @@ mod test_parse_ia5string_subject {
 			email_address_dn_type.clone(),
 			email_address_dn_value.clone(),
 		);
-		let cert = Certificate::generate_self_signed(params).unwrap();
+		let (cert, _) = Certificate::generate_self_signed(params).unwrap();
 		let cert_der = cert.der();
 
 		// We should be able to parse the certificate with x509-parser.
