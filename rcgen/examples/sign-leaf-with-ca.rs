@@ -1,5 +1,5 @@
 use rcgen::{
-	BasicConstraints, Certificate, CertificateParams, DnType, DnValue::PrintableString,
+	BasicConstraints, CertificateParams, CertifiedKey, DnType, DnValue::PrintableString,
 	ExtendedKeyUsagePurpose, IsCa, KeyUsagePurpose,
 };
 use time::{Duration, OffsetDateTime};
@@ -16,7 +16,7 @@ fn main() {
 	println!("ca certificate: {ca_cert_pem}",);
 }
 
-fn new_ca() -> Certificate {
+fn new_ca() -> CertifiedKey {
 	let mut params = CertificateParams::new(Vec::default());
 	let (yesterday, tomorrow) = validity_period();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
@@ -32,10 +32,10 @@ fn new_ca() -> Certificate {
 
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
-	Certificate::generate_self_signed(params).unwrap()
+	CertifiedKey::generate_self_signed(params).unwrap()
 }
 
-fn new_end_entity() -> Certificate {
+fn new_end_entity() -> CertifiedKey {
 	let name = "entity.other.host";
 	let mut params = CertificateParams::new(vec![name.into()]);
 	let (yesterday, tomorrow) = validity_period();
@@ -47,7 +47,7 @@ fn new_end_entity() -> Certificate {
 		.push(ExtendedKeyUsagePurpose::ServerAuth);
 	params.not_before = yesterday;
 	params.not_after = tomorrow;
-	Certificate::generate_self_signed(params).unwrap()
+	CertifiedKey::generate_self_signed(params).unwrap()
 }
 
 fn validity_period() -> (OffsetDateTime, OffsetDateTime) {

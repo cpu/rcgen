@@ -1,4 +1,4 @@
-use rcgen::{date_time_ymd, Certificate, CertificateParams, DistinguishedName, DnType, SanType};
+use rcgen::{date_time_ymd, CertificateParams, CertifiedKey, DistinguishedName, DnType, SanType};
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		SanType::DnsName("localhost".to_string()),
 	];
 
-	let cert = Certificate::generate_self_signed(params)?;
+	let cert = CertifiedKey::generate_self_signed(params)?;
 
 	let pem_serialized = cert.pem();
 	let pem = pem::parse(&pem_serialized)?;
