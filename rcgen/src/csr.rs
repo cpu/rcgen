@@ -1,10 +1,10 @@
+#[cfg(any(feature = "x509-parser", feature = "pem"))]
+use crate::Error;
 #[cfg(feature = "x509-parser")]
 use crate::{DistinguishedName, SanType};
-#[cfg(feature = "pem")]
-use pem::Pem;
 use std::hash::Hash;
 
-use crate::{CertificateParams, CertifiedKey, Error, PublicKeyData, SignatureAlgorithm};
+use crate::{CertificateParams, PublicKeyData, SignatureAlgorithm};
 
 /// A public key, extracted from a CSR
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -91,26 +91,5 @@ impl CertificateSigningRequest {
 			params,
 			public_key: PublicKey { alg, raw },
 		})
-	}
-	/// Serializes the requested certificate, signed with another certificate's key, in binary DER format
-	pub fn serialize_der_with_signer(&self, ca: &CertifiedKey) -> Result<Vec<u8>, Error> {
-		self.params.serialize_der_with_signer(
-			&self.public_key,
-			ca.cert.params.alg,
-			&ca.key_pair,
-			&ca.cert.params.distinguished_name,
-		)
-	}
-	/// Serializes the requested certificate, signed with another certificate's key, to the ASCII PEM format
-	#[cfg(feature = "pem")]
-	pub fn serialize_pem_with_signer(&self, ca: &CertifiedKey) -> Result<String, Error> {
-		let contents = self.params.serialize_der_with_signer(
-			&self.public_key,
-			ca.cert.params.alg,
-			&ca.key_pair,
-			&ca.cert.params.distinguished_name,
-		)?;
-		let p = Pem::new("CERTIFICATE", contents);
-		Ok(pem::encode_config(&p, crate::ENCODE_CONFIG))
 	}
 }

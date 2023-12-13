@@ -1538,14 +1538,6 @@ impl CertifiedKey {
 	pub fn get_params(&self) -> &CertificateParams {
 		&self.cert.params
 	}
-	/// Calculates a subject key identifier for the certificate subject's public key.
-	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
-	pub fn get_key_identifier(&self) -> Vec<u8> {
-		self.cert
-			.params
-			.key_identifier_method
-			.calculate(&self.key_pair)
-	}
 	/// Get the certificate in DER encoded format
 	pub fn der(&self) -> &[u8] {
 		&self.cert.cert_der
@@ -1554,6 +1546,14 @@ impl CertifiedKey {
 	#[cfg(feature = "pem")]
 	pub fn pem(&self) -> String {
 		pem::encode_config(&Pem::new("CERTIFICATE", self.der()), ENCODE_CONFIG)
+	}
+	/// Calculates a subject key identifier for the certificate subject's public key.
+	/// This key identifier is used in the SubjectKeyIdentifier X.509v3 extension.
+	pub fn get_key_identifier(&self) -> Vec<u8> {
+		self.cert
+			.params
+			.key_identifier_method
+			.calculate(&self.key_pair)
 	}
 	/// Serializes a certificate signing request in binary DER format
 	pub fn serialize_request_der(&self) -> Result<Vec<u8>, Error> {
@@ -1615,6 +1615,38 @@ impl CertifiedKey {
 			},
 			Some(kp) => Ok(kp),
 		}
+	}
+}
+
+impl Certificate {
+	/// Issue a certificate for the given request, signed by the provided issuer.
+	pub fn generate_request(
+		request: CertificateSigningRequest,
+		issuer: &CertifiedKey,
+	) -> Result<Self, Error> {
+		let cert_der = request.params.serialize_der_with_signer(
+			&request.public_key,
+			request.params.alg,
+			&issuer.key_pair,
+			&issuer.cert.params.distinguished_name,
+		)?;
+		Ok(Certificate {
+			params: request.params,
+			cert_der,
+		})
+	}
+	/// Returns the certificate parameters
+	pub fn get_params(&self) -> &CertificateParams {
+		&self.params
+	}
+	/// Get the certificate in DER encoded format
+	pub fn der(&self) -> &[u8] {
+		&self.cert_der
+	}
+	/// Get the certificate in PEM encoded format.
+	#[cfg(feature = "pem")]
+	pub fn pem(&self) -> String {
+		pem::encode_config(&Pem::new("CERTIFICATE", self.der()), ENCODE_CONFIG)
 	}
 }
 

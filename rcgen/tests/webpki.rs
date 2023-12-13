@@ -1,5 +1,6 @@
 use rcgen::{
-	BasicConstraints, CertificateParams, CertifiedKey, DnType, Error, IsCa, KeyPair, RemoteKeyPair,
+	BasicConstraints, Certificate, CertificateParams, CertifiedKey, DnType, Error, IsCa, KeyPair,
+	RemoteKeyPair,
 };
 use rcgen::{
 	CertificateRevocationList, CertificateRevocationListParams, RevocationReason, RevokedCertParams,
@@ -463,19 +464,19 @@ fn test_certificate_from_csr() {
 	params
 		.distinguished_name
 		.push(DnType::CommonName, "Dev domain");
-	let cert = CertifiedKey::generate_self_signed(params).unwrap();
-	let csr_der = cert.serialize_request_der().unwrap();
+	let orig_cert = CertifiedKey::generate_self_signed(params).unwrap();
+	let csr_der = orig_cert.serialize_request_der().unwrap();
 	let csr = CertificateSigningRequest::from_der(&csr_der).unwrap();
 
 	let mut params = util::default_params();
 	params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
 	let ca_cert = CertifiedKey::generate_self_signed(params).unwrap();
-	let cert_der = csr.serialize_der_with_signer(&ca_cert).unwrap();
+	let cert = Certificate::generate_request(csr, &ca_cert).unwrap();
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		&cert_der,
-		&cert,
+		cert.der(),
+		&orig_cert,
 		ca_cert.der(),
 		&webpki::ECDSA_P256_SHA256,
 		&webpki::ECDSA_P256_SHA256,
