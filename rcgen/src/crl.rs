@@ -269,7 +269,8 @@ impl CertificateRevocationListParams {
 					// Write authority key identifier.
 					write_x509_authority_key_identifier(
 						writer.next(),
-						self.key_identifier_method.calculate(issuer),
+						self.key_identifier_method
+							.calculate(issuer.public_key_der()),
 					);
 
 					// Write CRL number.
