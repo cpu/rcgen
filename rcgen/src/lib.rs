@@ -1534,6 +1534,28 @@ impl Certificate {
 		)?;
 		Ok((Certificate { params, spki, der }, key_pair))
 	}
+	/// Generate a new certificate using the certificate signing request parameters, signed by
+	/// the provided issuer.
+	pub fn generate_request(
+		request: CertificateSigningRequest,
+		issuer: &Certificate,
+		issuer_key: &KeyPair,
+	) -> Result<Certificate, Error> {
+		let der = request.params.serialize_der_with_signer(
+			&request.public_key,
+			request.params.alg,
+			issuer_key,
+			&issuer.params.distinguished_name,
+		)?;
+		let spki = yasna::construct_der(|writer| {
+			request.public_key.serialize_public_key_der(writer);
+		});
+		Ok(Certificate {
+			params: request.params,
+			spki,
+			der,
+		})
+	}
 	/// Returns the certificate parameters
 	pub fn get_params(&self) -> &CertificateParams {
 		&self.params
