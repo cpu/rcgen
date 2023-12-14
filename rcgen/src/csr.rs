@@ -12,7 +12,7 @@ pub struct PublicKey {
 }
 
 impl PublicKeyData for PublicKey {
-	fn alg(&self) -> &SignatureAlgorithm {
+	fn alg(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 

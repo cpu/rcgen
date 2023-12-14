@@ -343,7 +343,7 @@ impl TryFrom<Vec<u8>> for KeyPair {
 }
 
 impl PublicKeyData for KeyPair {
-	fn alg(&self) -> &SignatureAlgorithm {
+	fn alg(&self) -> &'static SignatureAlgorithm {
 		self.alg
 	}
 	fn raw_bytes(&self) -> &[u8] {
@@ -390,7 +390,7 @@ impl<T> ExternalError<T> for Result<T, pem::PemError> {
 }
 
 pub(crate) trait PublicKeyData {
-	fn alg(&self) -> &SignatureAlgorithm;
+	fn alg(&self) -> &'static SignatureAlgorithm;
 
 	fn raw_bytes(&self) -> &[u8];
 
