@@ -243,6 +243,18 @@ impl KeyPair {
 			let rsakp = RsaKeyPair::from_pkcs8(pkcs8)._err()?;
 			KeyPairKind::Rsa(rsakp, &signature::RSA_PSS_SHA256)
 		} else {
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			if alg == &PKCS_ECDSA_P521_SHA512 {
+				KeyPairKind::Ec(ecdsa_from_pkcs8(
+					&signature::ECDSA_P521_SHA512_ASN1_SIGNING,
+					pkcs8,
+					rng,
+				)?)
+			} else {
+				panic!("Unknown SignatureAlgorithm specified!");
+			}
+
+			#[cfg(feature = "ring")]
 			panic!("Unknown SignatureAlgorithm specified!");
 		};
 
@@ -274,7 +286,19 @@ impl KeyPair {
 				&PKCS_RSA_SHA256,
 			)
 		} else {
-			return Err(Error::CouldNotParseKeyPair);
+			#[cfg(all(feature = "aws_lc_rs", not(feature = "ring")))]
+			if let Ok(eckp) =
+				ecdsa_from_pkcs8(&signature::ECDSA_P521_SHA512_ASN1_SIGNING, pkcs8, &rng)
+			{
+				(KeyPairKind::Ec(eckp), &PKCS_ECDSA_P521_SHA512)
+			} else {
+				return Err(Error::CouldNotParseKeyPair);
+			}
+
+			#[cfg(feature = "ring")]
+			{
+				return Err(Error::CouldNotParseKeyPair);
+			}
 		};
 		Ok((kind, alg))
 	}
