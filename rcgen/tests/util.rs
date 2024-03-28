@@ -137,5 +137,5 @@ pub fn cert_with_crl_dps() -> Vec<u8> {
 		},
 	];
 
-	params.self_signed(&key_pair).unwrap().der().to_vec()
+	params.self_signed(&key_pair).unwrap().borrow_der().to_vec()
 }

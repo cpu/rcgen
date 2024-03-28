@@ -421,7 +421,8 @@ fn test_openssl_crl_parse() {
 	let openssl_crl = X509Crl::from_der(crl.der()).expect("failed to parse CRL DER");
 
 	// The properties of the CRL should match expected.
-	let openssl_issuer = X509::from_der(issuer.der()).unwrap();
+	let issuer_der = issuer.borrow_der();
+	let openssl_issuer = X509::from_der(&issuer_der).unwrap();
 	let expected_last_update =
 		Asn1Time::from_unix(crl.params().this_update.unix_timestamp()).unwrap();
 	assert!(openssl_crl.last_update().eq(&expected_last_update));
