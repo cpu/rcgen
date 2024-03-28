@@ -61,7 +61,7 @@ mod test_convert_x509_subject_alternative_name {
 		// Serialize our cert that has our chosen san, so we can testing parsing/deserializing it.
 		let ca_der = cert.der();
 
-		let actual = CertificateParams::from_ca_cert_der(ca_der).unwrap();
+		let actual = CertificateParams::from_ca_cert_der(&ca_der).unwrap();
 		assert!(actual.subject_alt_names.contains(&ip_san));
 	}
 }
@@ -96,7 +96,8 @@ mod test_x509_custom_ext {
 		// See https://github.com/rustls/rcgen/issues/122
 		params.subject_alt_names = Vec::default();
 		let test_cert = params.self_signed(&test_key).unwrap();
-		let (_, x509_test_cert) = X509Certificate::from_der(test_cert.der()).unwrap();
+		let test_cert_der = test_cert.der();
+		let (_, x509_test_cert) = X509Certificate::from_der(&test_cert_der).unwrap();
 
 		// We should be able to find the extension by OID, with expected criticality and value.
 		let favorite_drink_ext = x509_test_cert
@@ -150,7 +151,8 @@ mod test_x509_parser_crl {
 		let (crl, issuer) = util::test_crl();
 		let revoked_cert = crl.params().revoked_certs.first().unwrap();
 		let revoked_cert_serial = BigUint::from_bytes_be(revoked_cert.serial_number.as_ref());
-		let (_, x509_issuer) = X509Certificate::from_der(issuer.der()).unwrap();
+		let issuer_der = issuer.der();
+		let (_, x509_issuer) = X509Certificate::from_der(&issuer_der).unwrap();
 
 		// We should be able to parse the CRL with x509-parser without error.
 		let (_, x509_crl) =
@@ -311,10 +313,10 @@ mod test_parse_ia5string_subject {
 		let cert_der = cert.der();
 
 		// We should be able to parse the certificate with x509-parser.
-		assert!(x509_parser::parse_x509_certificate(cert_der).is_ok());
+		assert!(x509_parser::parse_x509_certificate(&cert_der).is_ok());
 
 		// We should be able to reconstitute params from the DER using x509-parser.
-		let params_from_cert = CertificateParams::from_ca_cert_der(cert_der).unwrap();
+		let params_from_cert = CertificateParams::from_ca_cert_der(&cert_der).unwrap();
 
 		// We should find the expected distinguished name in the reconstituted params.
 		let expected_names = &[(&email_address_dn_type, &email_address_dn_value)];
@@ -343,10 +345,10 @@ mod test_parse_other_name_alt_name {
 		let cert_der = cert.der();
 
 		// We should be able to parse the certificate with x509-parser.
-		assert!(x509_parser::parse_x509_certificate(cert_der).is_ok());
+		assert!(x509_parser::parse_x509_certificate(&cert_der).is_ok());
 
 		// We should be able to reconstitute params from the DER using x509-parser.
-		let params_from_cert = CertificateParams::from_ca_cert_der(cert_der).unwrap();
+		let params_from_cert = CertificateParams::from_ca_cert_der(&cert_der).unwrap();
 
 		// We should find the expected distinguished name in the reconstituted params.
 		let expected_alt_names = &[&other_name];

@@ -52,7 +52,7 @@ fn test_botan() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn test_botan_256() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_botan_384() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn test_botan_521() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn test_botan_25519() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_botan_25519_v1_given() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn test_botan_25519_v2_given() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -123,7 +123,7 @@ fn test_botan_rsa_given() {
 	let cert = params.self_signed(&key_pair).unwrap();
 
 	// Now verify the certificate.
-	check_cert(cert.der(), &cert);
+	check_cert(&cert.der(), &cert);
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn test_botan_separate_ca() {
 
 	let key_pair = KeyPair::generate().unwrap();
 	let cert = params.signed_by(&key_pair, &ca_cert, &ca_key).unwrap();
-	check_cert_ca(cert.der(), &cert, ca_cert.der());
+	check_cert_ca(&cert.der(), &cert, &ca_cert.der());
 }
 
 #[cfg(feature = "x509-parser")]
@@ -156,7 +156,7 @@ fn test_botan_imported_ca() {
 
 	let ca_cert_der = ca_cert.der();
 
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(&ca_cert_der).unwrap();
 	let imported_ca_cert = imported_ca_cert_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -173,7 +173,7 @@ fn test_botan_imported_ca() {
 	let cert = params
 		.signed_by(&key_pair, &imported_ca_cert, &ca_key)
 		.unwrap();
-	check_cert_ca(cert.der(), &cert, ca_cert_der);
+	check_cert_ca(&cert.der(), &cert, &ca_cert_der);
 }
 
 #[cfg(feature = "x509-parser")]
@@ -189,7 +189,7 @@ fn test_botan_imported_ca_with_printable_string() {
 
 	let ca_cert_der = ca_cert.der();
 
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(&ca_cert_der).unwrap();
 	let imported_ca_cert = imported_ca_cert_params
 		.self_signed(&imported_ca_key)
 		.unwrap();
@@ -208,7 +208,7 @@ fn test_botan_imported_ca_with_printable_string() {
 		.signed_by(&key_pair, &imported_ca_cert, &imported_ca_key)
 		.unwrap();
 
-	check_cert_ca(cert.der(), &cert, ca_cert_der);
+	check_cert_ca(&cert.der(), &cert, &ca_cert_der);
 }
 
 #[test]
@@ -233,7 +233,7 @@ fn test_botan_crl_parse() {
 	ee.not_after = rcgen::date_time_ymd(3016, 1, 1);
 	let ee_key = KeyPair::generate_for(alg).unwrap();
 	let ee = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
-	let botan_ee = botan::Certificate::load(ee.der()).unwrap();
+	let botan_ee = botan::Certificate::load(&ee.der()).unwrap();
 
 	// Generate a CRL with the issuer that revokes the EE cert.
 	let now = OffsetDateTime::now_utc();

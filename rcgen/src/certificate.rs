@@ -44,9 +44,10 @@ impl Certificate {
 	///
 	/// [`CertificateDer`] implements `Deref<Target = [u8]>` and `AsRef<[u8]>`, so you can easily
 	/// extract the DER bytes from the return value.
-	pub fn der(&self) -> &CertificateDer<'static> {
-		&self.der
+	pub fn der<'a>(&'a self) -> CertificateDer<'a> {
+		CertificateDer::from(self.der.as_ref())
 	}
+
 	/// Get the certificate in PEM encoded format.
 	#[cfg(feature = "pem")]
 	pub fn pem(&self) -> String {
@@ -1411,7 +1412,8 @@ PITGdT9dgN88nHPCle0B1+OY+OZ5
 			let ca_cert = params.self_signed(&kp).unwrap();
 			assert_eq!(&expected_ski, &ca_cert.key_identifier());
 
-			let (_remainder, x509) = x509_parser::parse_x509_certificate(ca_cert.der()).unwrap();
+			let ca_cert_der = ca_cert.der();
+			let (_remainder, x509) = x509_parser::parse_x509_certificate(&ca_cert_der).unwrap();
 			assert_eq!(
 				&expected_ski,
 				&x509

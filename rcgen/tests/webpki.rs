@@ -116,7 +116,7 @@ fn test_webpki() {
 	let sign_fn =
 		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ECDSA_P256_SHA256,
@@ -133,7 +133,7 @@ fn test_webpki_256() {
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ECDSA_P256_SHA256,
@@ -150,7 +150,7 @@ fn test_webpki_384() {
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P384_SHA384_ASN1_SIGNING);
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ECDSA_P384_SHA384,
@@ -166,7 +166,7 @@ fn test_webpki_25519() {
 
 	// Now verify the certificate.
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ED25519,
@@ -183,7 +183,7 @@ fn test_webpki_25519_v1_given() {
 
 	// Now verify the certificate.
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ED25519,
@@ -200,7 +200,7 @@ fn test_webpki_25519_v2_given() {
 
 	// Now verify the certificate.
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ED25519,
@@ -217,7 +217,7 @@ fn test_webpki_rsa_given() {
 
 	// Now verify the certificate.
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::RSA_PKCS1_2048_8192_SHA256,
@@ -253,7 +253,7 @@ fn test_webpki_rsa_combinations_given() {
 		let cert = params.self_signed(&key_pair).unwrap();
 
 		// Now verify the certificate.
-		check_cert(cert.der(), &cert, &key_pair, c.1, |msg, cert| {
+		check_cert(&cert.der(), &cert, &key_pair, c.1, |msg, cert| {
 			sign_msg_rsa(msg, cert, c.2)
 		});
 	}
@@ -277,9 +277,9 @@ fn test_webpki_separate_ca() {
 	let cert = params.signed_by(&key_pair, &ca_cert, &ca_key).unwrap();
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		cert.der(),
+		&cert.der(),
 		&key_pair,
-		ca_cert.der(),
+		&ca_cert.der(),
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
@@ -304,9 +304,9 @@ fn test_webpki_separate_ca_with_other_signing_alg() {
 	let key_pair = KeyPair::generate_for(&rcgen::PKCS_ED25519).unwrap();
 	let cert = params.signed_by(&key_pair, &ca_cert, &ca_key).unwrap();
 	check_cert_ca(
-		cert.der(),
+		&cert.der(),
 		&key_pair,
-		ca_cert.der(),
+		&ca_cert.der(),
 		webpki::ring::ED25519,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_msg_ed25519,
@@ -361,7 +361,7 @@ fn from_remote() {
 		signature.as_ref().to_vec()
 	};
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&remote,
 		webpki::ring::ECDSA_P256_SHA256,
@@ -416,7 +416,7 @@ fn test_webpki_imported_ca() {
 
 	let ca_cert_der = ca_cert.der();
 
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(&ca_cert_der).unwrap();
 	let imported_ca_cert = imported_ca_cert_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -433,9 +433,9 @@ fn test_webpki_imported_ca() {
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		cert.der(),
+		&cert.der(),
 		&cert_key,
-		ca_cert_der,
+		&ca_cert_der,
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
@@ -455,7 +455,7 @@ fn test_webpki_imported_ca_with_printable_string() {
 
 	let ca_cert_der = ca_cert.der();
 
-	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(ca_cert_der).unwrap();
+	let imported_ca_cert_params = CertificateParams::from_ca_cert_der(&ca_cert_der).unwrap();
 	let imported_ca_cert = imported_ca_cert_params.self_signed(&ca_key).unwrap();
 
 	let mut params = CertificateParams::new(vec!["crabs.crabs".to_string()]).unwrap();
@@ -472,9 +472,9 @@ fn test_webpki_imported_ca_with_printable_string() {
 
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		cert.der(),
+		&cert.der(),
 		&cert_key,
-		ca_cert_der,
+		&ca_cert_der,
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
@@ -503,9 +503,9 @@ fn test_certificate_from_csr() {
 	let sign_fn =
 		|key_pair, msg| sign_msg_ecdsa(key_pair, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert_ca(
-		cert.der(),
+		&cert.der(),
 		&cert_key,
-		ca_cert.der(),
+		&ca_cert.der(),
 		webpki::ring::ECDSA_P256_SHA256,
 		webpki::ring::ECDSA_P256_SHA256,
 		sign_fn,
@@ -521,7 +521,7 @@ fn test_webpki_serial_number() {
 	// Now verify the certificate.
 	let sign_fn = |cert, msg| sign_msg_ecdsa(cert, msg, &signature::ECDSA_P256_SHA256_ASN1_SIGNING);
 	check_cert(
-		cert.der(),
+		&cert.der(),
 		&cert,
 		&key_pair,
 		webpki::ring::ECDSA_P256_SHA256,
@@ -584,9 +584,11 @@ fn test_webpki_crl_revoke() {
 	let ee = ee.signed_by(&ee_key, &issuer, &issuer_key).unwrap();
 
 	// Set up webpki's verification requirements.
-	let trust_anchor = anchor_from_trusted_cert(issuer.der()).unwrap();
+	let issuer_der = issuer.der();
+	let trust_anchor = anchor_from_trusted_cert(&issuer_der).unwrap();
 	let trust_anchor_list = &[trust_anchor];
-	let end_entity_cert = EndEntityCert::try_from(ee.der()).unwrap();
+	let ee_der = ee.der();
+	let end_entity_cert = EndEntityCert::try_from(&ee_der).unwrap();
 	let unix_time = 0x40_00_00_00;
 	let time = UnixTime::since_unix_epoch(StdDuration::from_secs(unix_time));
 
