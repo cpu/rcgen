@@ -1,3 +1,5 @@
+//! ASN.1 string types
+
 use std::{fmt, str::FromStr};
 
 use crate::{Error, InvalidAsn1String};
