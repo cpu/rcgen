@@ -116,10 +116,9 @@ impl CertificateSigningRequestParams {
 			distinguished_name: DistinguishedName::from_name(&info.subject)?,
 			..CertificateParams::default()
 		};
-		let raw = info.subject_pki.subject_public_key.data.to_vec();
+		let raw = info.subject_pki.subject_public_key.as_ref().to_vec();
 
-		if let Some(extensions) = csr.requested_extensions() {
-			for ext in extensions {
+			for ext in csr.requested_extensions() {
 				match ext {
 					x509_parser::extensions::ParsedExtension::KeyUsage(key_usage) => {
 						// This x509 parser stores flags in reversed bit BIT STRING order
@@ -127,7 +126,7 @@ impl CertificateSigningRequestParams {
 							KeyUsagePurpose::from_u16(key_usage.flags.reverse_bits());
 					},
 					x509_parser::extensions::ParsedExtension::SubjectAlternativeName(san) => {
-						for name in &san.general_names {
+						for name in san.general_names() {
 							params
 								.subject_alt_names
 								.push(SanType::try_from_general(name)?);
@@ -173,7 +172,6 @@ impl CertificateSigningRequestParams {
 					},
 					_ => return Err(Error::UnsupportedExtension),
 				}
-			}
 		}
 
 		// Not yet handled:

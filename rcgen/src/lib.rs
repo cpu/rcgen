@@ -183,7 +183,7 @@ impl SanType {
 		let sans = x509
 			.subject_alternative_name()
 			.map_err(|_| Error::CouldNotParseCertificate)?
-			.map(|ext| &ext.value.general_names);
+			.map(|ext| &ext.value.0);
 
 		let Some(sans) = sans else {
 			return Ok(Vec::new());
@@ -242,7 +242,7 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 impl SanType {
 	#[cfg(feature = "x509-parser")]
 	fn try_from_general(name: &x509_parser::extensions::GeneralName<'_>) -> Result<Self, Error> {
-		use x509_parser::der_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
+		use x509_parser::asn1_rs::{self, FromDer, Tag, TaggedExplicit};
 		Ok(match name {
 			x509_parser::extensions::GeneralName::RFC822Name(name) => {
 				SanType::Rfc822Name((*name).try_into()?)
@@ -257,13 +257,13 @@ impl SanType {
 			x509_parser::extensions::GeneralName::OtherName(oid, value) => {
 				let oid = oid.iter().ok_or(Error::CouldNotParseCertificate)?;
 				// We first remove the explicit tag ([0] EXPLICIT)
-				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(value)
+				let (_, other_name) = TaggedExplicit::<asn1_rs::Any, _, 0>::from_der(value.as_bytes())
 					.map_err(|_| Error::CouldNotParseCertificate)?;
 				let other_name = other_name.into_inner();
 
 				let other_name_value = match other_name.tag() {
 					Tag::Utf8String => OtherNameValue::Utf8String(
-						std::str::from_utf8(other_name.data)
+						std::str::from_utf8(other_name.data.as_bytes2())
 							.map_err(|_| Error::CouldNotParseCertificate)?
 							.to_owned(),
 					),
@@ -384,7 +384,7 @@ impl DistinguishedName {
 
 	#[cfg(feature = "x509-parser")]
 	fn from_name(name: &x509_parser::x509::X509Name) -> Result<Self, Error> {
-		use x509_parser::der_parser::asn1_rs::Tag;
+		use x509_parser::asn1_rs::Tag;
 
 		let mut dn = DistinguishedName::new();
 		for rdn in name.iter() {
@@ -406,18 +406,18 @@ impl DistinguishedName {
 				.iter()
 				.ok_or(Error::CouldNotParseCertificate)?;
 			let dn_type = DnType::from_oid(&attr_type_oid.collect::<Vec<_>>());
-			let data = attr.attr_value().data;
+			let data = attr.attr_value().data.clone();
 			let try_str =
 				|data| std::str::from_utf8(data).map_err(|_| Error::CouldNotParseCertificate);
 			let dn_value = match attr.attr_value().header.tag() {
-				Tag::BmpString => DnValue::BmpString(BmpString::from_utf16be(data.to_vec())?),
-				Tag::Ia5String => DnValue::Ia5String(try_str(data)?.try_into()?),
-				Tag::PrintableString => DnValue::PrintableString(try_str(data)?.try_into()?),
-				Tag::T61String => DnValue::TeletexString(try_str(data)?.try_into()?),
+				Tag::BmpString => DnValue::BmpString(BmpString::from_utf16be(data.as_bytes2().to_vec())?),
+				Tag::Ia5String => DnValue::Ia5String(try_str(data.as_bytes2())?.try_into()?),
+				Tag::PrintableString => DnValue::PrintableString(try_str(data.as_bytes2())?.try_into()?),
+				Tag::T61String => DnValue::TeletexString(try_str(data.as_bytes2())?.try_into()?),
 				Tag::UniversalString => {
-					DnValue::UniversalString(UniversalString::from_utf32be(data.to_vec())?)
+					DnValue::UniversalString(UniversalString::from_utf32be(data.as_bytes2().to_vec())?)
 				},
-				Tag::Utf8String => DnValue::Utf8String(try_str(data)?.to_owned()),
+				Tag::Utf8String => DnValue::Utf8String(try_str(data.as_bytes2())?.to_owned()),
 				_ => return Err(Error::CouldNotParseCertificate),
 			};
 
@@ -556,7 +556,7 @@ impl KeyIdMethod {
 			x509.iter_extensions()
 				.find_map(|ext| match ext.parsed_extension() {
 					x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(key_id) => {
-						Some(KeyIdMethod::PreSpecified(key_id.0.into()))
+						Some(KeyIdMethod::PreSpecified((*key_id.0).into()))
 					},
 					_ => None,
 				});

@@ -5,6 +5,7 @@ use std::fmt;
 use pem::Pem;
 #[cfg(feature = "crypto")]
 use pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+use x509_parser::asn1_rs::{DerParser, Input};
 use yasna::{DERWriter, DERWriterSeq};
 
 #[cfg(any(feature = "crypto", feature = "pem"))]
@@ -651,12 +652,11 @@ impl SubjectPublicKeyInfo {
 	#[cfg(feature = "x509-parser")]
 	pub fn from_der(spki_der: &[u8]) -> Result<Self, Error> {
 		use x509_parser::{
-			prelude::FromDer,
 			x509::{AlgorithmIdentifier, SubjectPublicKeyInfo},
 		};
 
 		let (rem, spki) =
-			SubjectPublicKeyInfo::from_der(spki_der).map_err(|e| Error::X509(e.to_string()))?;
+			SubjectPublicKeyInfo::parse_der(Input::from(spki_der)).map_err(|e| Error::X509(e.to_string()))?;
 		if !rem.is_empty() {
 			return Err(Error::X509(
 				"trailing bytes in SubjectPublicKeyInfo".to_string(),
@@ -668,7 +668,7 @@ impl SubjectPublicKeyInfo {
 				let bytes = yasna::construct_der(|writer| {
 					alg.write_oids_sign_alg(writer);
 				});
-				let Ok((rest, aid)) = AlgorithmIdentifier::from_der(&bytes) else {
+				let Ok((rest, aid)) = AlgorithmIdentifier::parse_der(Input::from(&bytes)) else {
 					return false;
 				};
 				if !rest.is_empty() {

@@ -1244,7 +1244,7 @@ mod tests {
 	#[cfg(feature = "crypto")]
 	#[test]
 	fn test_with_extended_key_usages_other() {
-		use x509_parser::der_parser::asn1_rs::Oid;
+		use x509_parser::asn1_rs::Oid;
 		let mut params: CertificateParams = Default::default();
 		const OID_1: &[u64] = &[1, 2, 3, 4];
 		const OID_2: &[u64] = &[1, 2, 3, 4, 5, 6];
