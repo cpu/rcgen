@@ -196,12 +196,12 @@ impl CertificateParams {
 	fn csr_extensions(&self) -> Result<Extensions<'_>, Error> {
 		let mut exts = Extensions::default();
 
+		if let Some(san) = SubjectAlternativeName::from_params(self) {
+			exts.push(Box::new(san))?;
+		}
 		if !self.key_usages.is_empty() {
 			let ku = self.key_usages.as_slice();
 			exts.push(Box::new(ku))?;
-		}
-		if let Some(san) = SubjectAlternativeName::from_params(self) {
-			exts.push(Box::new(san))?;
 		}
 		if !self.extended_key_usages.is_empty() {
 			let eku = self.extended_key_usages.as_slice();
