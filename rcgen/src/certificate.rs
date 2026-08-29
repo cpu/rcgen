@@ -6,11 +6,11 @@ use pem::Pem;
 use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, DERWriterSeq, Tag};
+use yasna::{DERWriter, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, Extension, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extension, Extensions, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -387,23 +387,10 @@ impl CertificateParams {
 			write_distinguished_name(writer.next(), &self.distinguished_name);
 			// Write subjectPublicKeyInfo
 			serialize_public_key_der(pub_key, writer.next());
-			// write extensions
-			let should_write_exts = self.use_authority_key_identifier_extension
-				|| !self.subject_alt_names.is_empty()
-				|| !self.key_usages.is_empty()
-				|| !self.extended_key_usages.is_empty()
-				|| self.name_constraints.iter().any(|c| !c.is_empty())
-				|| !self.crl_distribution_points.is_empty()
-				|| matches!(self.is_ca, IsCa::ExplicitNoCa)
-				|| matches!(self.is_ca, IsCa::Ca(_))
-				|| !self.custom_extensions.is_empty();
-			if !should_write_exts {
-				return Ok(());
-			}
-
-			writer.next().write_tagged(Tag::context(3), |writer| {
-				writer.write_sequence(|writer| self.write_extensions(writer, &pub_key_spki, issuer))
-			})?;
+			// Write extensions. The field is omitted entirely when the built
+			// collection is empty.
+			self.extensions(&pub_key_spki, issuer)?
+				.write_cert_der(writer.next());
 
 			Ok(())
 		})?;
@@ -411,54 +398,59 @@ impl CertificateParams {
 		Ok(der.into())
 	}
 
-	fn write_extensions(
+	/// Returns the X.509 extensions that the [`CertificateParams`] describe.
+	///
+	/// Returns an [`Error`] if the described extensions are invalid.
+	fn extensions(
 		&self,
-		writer: &mut DERWriterSeq,
 		pub_key_spki: &[u8],
 		issuer: &Issuer<'_, impl SigningKey>,
-	) -> Result<(), Error> {
+	) -> Result<Extensions<'_>, Error> {
+		let mut exts = Extensions::default();
+
 		if self.use_authority_key_identifier_extension {
-			AuthorityKeyIdentifier::from(issuer).write(writer.next());
+			exts.push(Box::new(AuthorityKeyIdentifier::from(issuer)))?;
 		}
 
 		if let Some(san) = SubjectAlternativeName::from_params(self) {
-			san.write(writer.next());
+			exts.push(Box::new(san))?;
 		}
 		if !self.key_usages.is_empty() {
 			let ku = self.key_usages.as_slice();
-			ku.write(writer.next());
+			exts.push(Box::new(ku))?;
 		}
 		if !self.extended_key_usages.is_empty() {
 			let eku = self.extended_key_usages.as_slice();
-			eku.write(writer.next());
+			exts.push(Box::new(eku))?;
 		}
 
 		if let Some(nc) = self.name_constraints.as_ref().filter(|nc| !nc.is_empty()) {
-			nc.write(writer.next());
+			exts.push(Box::new(nc))?;
 		}
 
 		if !self.crl_distribution_points.is_empty() {
 			let crl_dps = self.crl_distribution_points.as_slice();
-			crl_dps.write(writer.next());
+			exts.push(Box::new(crl_dps))?;
 		}
 
 		// SKI is currently only written for CA certificates (IsCa::Ca or
 		// IsCa::ExplicitNoCa).
 		if self.is_ca != IsCa::NoCa {
-			SubjectKeyIdentifier::new(&self.key_identifier_method, pub_key_spki)
-				.write(writer.next());
+			exts.push(Box::new(SubjectKeyIdentifier::new(
+				&self.key_identifier_method,
+				pub_key_spki,
+			)))?;
 		}
-
 		if self.is_ca != IsCa::NoCa {
 			let bc = self.is_ca;
-			bc.write(writer.next());
+			exts.push(Box::new(bc))?;
 		}
 
 		for custom_ext in &self.custom_extensions {
-			custom_ext.write(writer.next());
+			exts.push(Box::new(custom_ext))?;
 		}
 
-		Ok(())
+		Ok(exts)
 	}
 
 	/// Insert an extended key usage (EKU) into the parameters if it does not already exist
