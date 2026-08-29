@@ -6,11 +6,11 @@ use pem::Pem;
 use pki_types::{CertificateDer, CertificateSigningRequestDer};
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime, Time};
 use yasna::models::ObjectIdentifier;
-use yasna::{DERWriter, Tag};
+use yasna::Tag;
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, Extension, Extensions, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extensions, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -187,37 +187,36 @@ impl CertificateParams {
 		})
 	}
 
-	/// Write a CSR extension request attribute as defined in [RFC 2985].
+	/// Returns the X.509 extensions for a CSR extension request attribute as defined
+	/// in [RFC 2985].
+	///
+	/// Returns an [`Error`] if the described extensions are invalid.
 	///
 	/// [RFC 2985]: <https://datatracker.ietf.org/doc/html/rfc2985>
-	fn write_extension_request_attribute(&self, writer: DERWriter) {
-		writer.write_sequence(|writer| {
-			writer.next().write_oid(&ObjectIdentifier::from_slice(
-				oid::PKCS_9_AT_EXTENSION_REQUEST,
-			));
-			writer.next().write_set(|writer| {
-				writer.next().write_sequence(|writer| {
-					if !self.key_usages.is_empty() {
-						let ku = self.key_usages.as_slice();
-						ku.write(writer.next());
-					}
-					if let Some(san) = SubjectAlternativeName::from_params(self) {
-						san.write(writer.next());
-					}
-					if !self.extended_key_usages.is_empty() {
-						let eku = self.extended_key_usages.as_slice();
-						eku.write(writer.next());
-					}
-					if self.is_ca != IsCa::NoCa {
-						let bc = self.is_ca;
-						bc.write(writer.next());
-					}
-					for custom_ext in &self.custom_extensions {
-						custom_ext.write(writer.next());
-					}
-				});
-			});
-		});
+	fn csr_extensions(&self) -> Result<Extensions<'_>, Error> {
+		let mut exts = Extensions::default();
+
+		if !self.key_usages.is_empty() {
+			let ku = self.key_usages.as_slice();
+			exts.push(Box::new(ku))?;
+		}
+		if let Some(san) = SubjectAlternativeName::from_params(self) {
+			exts.push(Box::new(san))?;
+		}
+		if !self.extended_key_usages.is_empty() {
+			let eku = self.extended_key_usages.as_slice();
+			exts.push(Box::new(eku))?;
+		}
+		if self.is_ca != IsCa::NoCa {
+			let bc = self.is_ca;
+			exts.push(Box::new(bc))?;
+		}
+
+		for custom_ext in &self.custom_extensions {
+			exts.push(Box::new(custom_ext))?;
+		}
+
+		Ok(exts)
 	}
 
 	/// Generate and serialize a certificate signing request (CSR).
@@ -270,7 +269,9 @@ impl CertificateParams {
 		} = self;
 		// - subject_key will be used by the caller
 		// - not_before and not_after cannot be put in a CSR
-		// - key_identifier_method is here because self.write_extended_key_usage uses it
+		// - The extension request fields (subject_alt_names, key_usages,
+		//   extended_key_usages, is_ca, custom_extensions) are handled by
+		//   self.csr_extensions()
 		// - There might be a use case for specifying the key identifier
 		// in the CSR, but in the current API it can't be distinguished
 		// from the defaults so this is left for a later version if
@@ -279,7 +280,11 @@ impl CertificateParams {
 			not_before,
 			not_after,
 			key_identifier_method,
+			subject_alt_names,
+			key_usages,
 			extended_key_usages,
+			is_ca,
+			custom_extensions,
 		);
 		if serial_number.is_some()
 			|| name_constraints.is_some()
@@ -289,12 +294,9 @@ impl CertificateParams {
 			return Err(Error::UnsupportedInCsr);
 		}
 
-		// Whether or not to write an extension request attribute
-		let write_extension_request = !key_usages.is_empty()
-			|| !subject_alt_names.is_empty()
-			|| !extended_key_usages.is_empty()
-			|| !custom_extensions.is_empty()
-			|| matches!(is_ca, IsCa::ExplicitNoCa | IsCa::Ca(_));
+		// The extension request attribute is elided entirely when the built
+		// collection is empty.
+		let extension_request = self.csr_extensions()?;
 
 		let der = sign_der(subject_key, |writer| {
 			// Write version
@@ -308,9 +310,7 @@ impl CertificateParams {
 				.write_tagged_implicit(Tag::context(0), |writer| {
 					// RFC 2986 specifies that attributes are a SET OF Attribute
 					writer.write_set_of(|writer| {
-						if write_extension_request {
-							self.write_extension_request_attribute(writer.next());
-						}
+						extension_request.write_csr_attribute(writer);
 
 						for Attribute { oid, values } in attrs {
 							writer.next().write_sequence(|writer| {
