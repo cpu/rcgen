@@ -433,14 +433,12 @@ impl CertificateParams {
 			exts.push(Box::new(crl_dps))?;
 		}
 
-		// SKI is currently only written for CA certificates (IsCa::Ca or
-		// IsCa::ExplicitNoCa).
-		if self.is_ca != IsCa::NoCa {
-			exts.push(Box::new(SubjectKeyIdentifier::new(
-				&self.key_identifier_method,
-				pub_key_spki,
-			)))?;
-		}
+		// RFC 5280 §4.2.1.2 describes the SKI as a MUST for CA certificates and a
+		// SHOULD for end entity certificates, so it is emitted for all certificates.
+		exts.push(Box::new(SubjectKeyIdentifier::new(
+			&self.key_identifier_method,
+			pub_key_spki,
+		)))?;
 		if self.is_ca != IsCa::NoCa {
 			let bc = self.is_ca;
 			exts.push(Box::new(bc))?;
@@ -703,6 +701,28 @@ mod tests {
 			params.self_signed(&key_pair).unwrap_err(),
 			Error::EmptyCrlDistributionPointUris
 		);
+	}
+
+	#[cfg(feature = "crypto")]
+	#[test]
+	fn test_end_entity_subject_key_identifier() {
+		// RFC 5280 §4.2.1.2 describes the SKI as a SHOULD for end entity
+		// certificates, so we expect it to be present for end entity certs too.
+		let params = CertificateParams::default();
+		let (key_pair, _) = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key_pair).unwrap();
+
+		let (_rem, cert) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+		let ski = cert
+			.iter_extensions()
+			.find_map(|ext| match ext.parsed_extension() {
+				x509_parser::extensions::ParsedExtension::SubjectKeyIdentifier(ski) => {
+					Some(ski.0.to_vec())
+				},
+				_ => None,
+			})
+			.unwrap();
+		assert_eq!(ski, params.key_identifier(&key_pair));
 	}
 
 	#[cfg(feature = "crypto")]
