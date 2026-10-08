@@ -431,6 +431,37 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
+impl StaticExtension for IsCa {
+	fn write_value(&self, writer: DERWriter) {
+		/*
+		   BasicConstraints ::= SEQUENCE {
+				cA                      BOOLEAN DEFAULT FALSE,
+				pathLenConstraint       INTEGER (0..MAX) OPTIONAL }
+		*/
+		writer.write_sequence(|writer| {
+			let IsCa::Ca(constraints) = self else {
+				// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires it
+				// to be omitted when false: the extension value is an empty
+				// SEQUENCE.
+				return;
+			};
+
+			writer.next().write_bool(true); // cA flag
+			if let PathLenConstraint::Constrained(path_len_constraint) = constraints {
+				writer.next().write_u8(*path_len_constraint); // pathLenConstraint integer
+			}
+		});
+	}
+
+	// RFC 5280 §4.2.1.9: "Conforming CAs MUST include this extension in all CA
+	// certificates that contain public keys used to validate digital signatures
+	// on certificates and MUST mark the extension as critical in such
+	// certificates."
+	const CRITICALITY: Criticality = Criticality::Critical;
+
+	const OID: &'static [u64] = oid::BASIC_CONSTRAINTS;
+}
+
 /// Whether the certificate is allowed to sign other certificates
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1170,6 +1201,43 @@ mod tests {
 				})
 			})
 		);
+	}
+
+	#[test]
+	fn basic_constraints_encoding() {
+		// The cA flag is DEFAULT FALSE, so DER (X.690 §11.5) requires that
+		// ExplicitNoCa encode as an empty SEQUENCE with the flag omitted.
+		// See https://github.com/rustls/rcgen/pull/444.
+		for (is_ca, expected) in [
+			(
+				// cA absent (FALSE): an empty SEQUENCE.
+				IsCa::ExplicitNoCa,
+				yasna::construct_der(|writer| writer.write_sequence(|_writer| {})),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Unconstrained),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| writer.next().write_bool(true))
+				}),
+			),
+			(
+				IsCa::Ca(PathLenConstraint::Constrained(5)),
+				yasna::construct_der(|writer| {
+					writer.write_sequence(|writer| {
+						writer.next().write_bool(true);
+						writer.next().write_u8(5);
+					})
+				}),
+			),
+		] {
+			let params = CertificateParams {
+				is_ca,
+				..CertificateParams::default()
+			};
+			let bc = params.is_ca;
+			let value = yasna::construct_der(|writer| StaticExtension::write_value(&bc, writer));
+			assert_eq!(value, expected, "unexpected encoding for {is_ca:?}");
+		}
 	}
 
 	#[test]
