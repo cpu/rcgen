@@ -216,23 +216,7 @@ fn ip_addr_from_octets(octets: &[u8]) -> Result<IpAddr, Error> {
 	}
 }
 
-/// An X.509v3 key usage extension according to [RFC 5280 §4.2.1.3].
-///
-/// [RFC 5280 §4.2.1.3]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.3>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct KeyUsage<'params>(&'params [KeyUsagePurpose]);
-
-impl<'params> KeyUsage<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.key_usages.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.key_usages))
-	}
-}
-
-impl StaticExtension for KeyUsage<'_> {
+impl StaticExtension for &[KeyUsagePurpose] {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   KeyUsage ::= BIT STRING {
@@ -248,7 +232,7 @@ impl StaticExtension for KeyUsage<'_> {
 			  decipherOnly            (8) }
 		*/
 		// u16 is large enough to encode the largest possible key usage (two-bytes)
-		let bit_string = self.0.iter().fold(0u16, |bit_string, key_usage| {
+		let bit_string = self.iter().fold(0u16, |bit_string, key_usage| {
 			bit_string | key_usage.to_u16()
 		});
 
@@ -347,30 +331,14 @@ impl KeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 extended key usage extension according to [RFC 5280 §4.2.1.12].
-///
-/// [RFC 5280 §4.2.1.12]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.12>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ExtendedKeyUsage<'params>(&'params [ExtendedKeyUsagePurpose]);
-
-impl<'params> ExtendedKeyUsage<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.extended_key_usages.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.extended_key_usages))
-	}
-}
-
-impl StaticExtension for ExtendedKeyUsage<'_> {
+impl StaticExtension for &[ExtendedKeyUsagePurpose] {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   ExtKeyUsageSyntax ::= SEQUENCE SIZE (1..MAX) OF KeyPurposeId
 		   KeyPurposeId ::= OBJECT IDENTIFIER
 		*/
 		writer.write_sequence(|writer| {
-			for usage in self.0.iter() {
+			for usage in self.iter() {
 				writer
 					.next()
 					.write_oid(&ObjectIdentifier::from_slice(usage.oid()));
@@ -463,27 +431,7 @@ impl ExtendedKeyUsagePurpose {
 	}
 }
 
-/// An X.509v3 name constraints extension according to [RFC 5280 §4.2.1.10].
-///
-/// [RFC 5280 §4.2.1.10]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.10>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NameConstraintsExt<'params> {
-	permitted_subtrees: &'params [GeneralSubtree],
-	excluded_subtrees: &'params [GeneralSubtree],
-}
-
-impl<'params> NameConstraintsExt<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		match &params.name_constraints {
-			// If both subtrees are empty, the extension must be omitted.
-			Some(nc) if !nc.is_empty() => Some(Self {
-				permitted_subtrees: &nc.permitted_subtrees,
-				excluded_subtrees: &nc.excluded_subtrees,
-			}),
-			_ => None,
-		}
-	}
-
+impl NameConstraints {
 	fn write_general_subtrees(writer: DERWriter, tag: u64, general_subtrees: &[GeneralSubtree]) {
 		/*
 		   GeneralSubtrees ::= SEQUENCE SIZE (1..MAX) OF GeneralSubtree
@@ -521,7 +469,7 @@ impl<'params> NameConstraintsExt<'params> {
 	}
 }
 
-impl StaticExtension for NameConstraintsExt<'_> {
+impl StaticExtension for &NameConstraints {
 	fn write_value(&self, writer: DERWriter) {
 		/*
 		   NameConstraints ::= SEQUENCE {
@@ -530,10 +478,10 @@ impl StaticExtension for NameConstraintsExt<'_> {
 		*/
 		writer.write_sequence(|writer| {
 			if !self.permitted_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 0, self.permitted_subtrees);
+				NameConstraints::write_general_subtrees(writer.next(), 0, &self.permitted_subtrees);
 			}
 			if !self.excluded_subtrees.is_empty() {
-				Self::write_general_subtrees(writer.next(), 1, self.excluded_subtrees);
+				NameConstraints::write_general_subtrees(writer.next(), 1, &self.excluded_subtrees);
 			}
 		});
 	}
@@ -757,27 +705,11 @@ impl FromStr for CidrSubnet {
 	}
 }
 
-/// An X.509v3 CRL distribution points extension according to [RFC 5280 §4.2.1.13].
-///
-/// [RFC 5280 §4.2.1.13]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2.1.13>
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct CrlDistributionPoints<'params>(&'params [CrlDistributionPoint]);
-
-impl<'params> CrlDistributionPoints<'params> {
-	pub(crate) fn from_params(params: &'params CertificateParams) -> Option<Self> {
-		if params.crl_distribution_points.is_empty() {
-			return None;
-		}
-
-		Some(Self(&params.crl_distribution_points))
-	}
-}
-
-impl StaticExtension for CrlDistributionPoints<'_> {
+impl StaticExtension for &[CrlDistributionPoint] {
 	fn write_value(&self, writer: DERWriter) {
 		// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 		writer.write_sequence(|writer| {
-			for distribution_point in self.0 {
+			for distribution_point in self.iter() {
 				distribution_point.write_der(writer.next());
 			}
 		})
@@ -1173,20 +1105,6 @@ mod tests {
 				})
 			})
 		);
-	}
-
-	#[test]
-	fn name_constraints_absent_when_subtrees_empty() {
-		// A name constraints extension with no permitted or excluded subtrees
-		// would violate SEQUENCE SIZE (1..MAX) and must be omitted.
-		let params = CertificateParams {
-			name_constraints: Some(crate::NameConstraints {
-				permitted_subtrees: Vec::new(),
-				excluded_subtrees: Vec::new(),
-			}),
-			..CertificateParams::default()
-		};
-		assert!(NameConstraintsExt::from_params(&params).is_none());
 	}
 
 	#[test]

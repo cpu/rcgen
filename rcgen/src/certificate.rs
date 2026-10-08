@@ -10,8 +10,7 @@ use yasna::{DERWriter, DERWriterSeq, Tag};
 
 use crate::csr::CertificateSigningRequest;
 use crate::extension::{
-	AuthorityKeyIdentifier, CrlDistributionPoints, ExtendedKeyUsage, Extension, KeyUsage,
-	NameConstraintsExt, SubjectAlternativeName, SubjectKeyIdentifier,
+	AuthorityKeyIdentifier, Extension, SubjectAlternativeName, SubjectKeyIdentifier,
 };
 use crate::key_pair::{serialize_public_key_der, sign_der, PublicKeyData};
 #[cfg(feature = "crypto")]
@@ -198,13 +197,15 @@ impl CertificateParams {
 			));
 			writer.next().write_set(|writer| {
 				writer.next().write_sequence(|writer| {
-					if let Some(ku) = KeyUsage::from_params(self) {
+					if !self.key_usages.is_empty() {
+						let ku = self.key_usages.as_slice();
 						ku.write(writer.next());
 					}
 					if let Some(san) = SubjectAlternativeName::from_params(self) {
 						san.write(writer.next());
 					}
-					if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+					if !self.extended_key_usages.is_empty() {
+						let eku = self.extended_key_usages.as_slice();
 						eku.write(writer.next());
 					}
 					self.write_ca_extensions(writer);
@@ -448,18 +449,21 @@ impl CertificateParams {
 		if let Some(san) = SubjectAlternativeName::from_params(self) {
 			san.write(writer.next());
 		}
-		if let Some(ku) = KeyUsage::from_params(self) {
+		if !self.key_usages.is_empty() {
+			let ku = self.key_usages.as_slice();
 			ku.write(writer.next());
 		}
-		if let Some(eku) = ExtendedKeyUsage::from_params(self) {
+		if !self.extended_key_usages.is_empty() {
+			let eku = self.extended_key_usages.as_slice();
 			eku.write(writer.next());
 		}
 
-		if let Some(nc) = NameConstraintsExt::from_params(self) {
+		if let Some(nc) = self.name_constraints.as_ref().filter(|nc| !nc.is_empty()) {
 			nc.write(writer.next());
 		}
 
-		if let Some(crl_dps) = CrlDistributionPoints::from_params(self) {
+		if !self.crl_distribution_points.is_empty() {
+			let crl_dps = self.crl_distribution_points.as_slice();
 			crl_dps.write(writer.next());
 		}
 
@@ -712,6 +716,22 @@ mod tests {
 	use crate::DnValue;
 	#[cfg(feature = "crypto")]
 	use crate::KeyPair;
+
+	#[cfg(all(feature = "crypto", feature = "x509-parser"))]
+	#[test]
+	fn empty_name_constraints_are_omitted() {
+		let params = CertificateParams {
+			name_constraints: Some(NameConstraints {
+				permitted_subtrees: Vec::new(),
+				excluded_subtrees: Vec::new(),
+			}),
+			..CertificateParams::default()
+		};
+		let (key, _) = KeyPair::generate().unwrap();
+		let cert = params.self_signed(&key).unwrap();
+		let (_, parsed) = x509_parser::parse_x509_certificate(cert.der()).unwrap();
+		assert!(parsed.name_constraints().unwrap().is_none());
+	}
 
 	#[cfg(feature = "crypto")]
 	#[test]
