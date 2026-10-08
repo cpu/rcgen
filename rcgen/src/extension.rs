@@ -1028,15 +1028,30 @@ impl KeyIdMethod {
 	}
 }
 
+impl<T: StaticExtension> Extension for T {
+	fn write_value(&self, writer: DERWriter) {
+		// Calling with fully qualified syntax to disambiguate.
+		StaticExtension::write_value(self, writer)
+	}
+
+	fn criticality(&self) -> Criticality {
+		T::CRITICALITY
+	}
+
+	fn oid(&self) -> &[u64] {
+		T::OID
+	}
+}
+
 /// A custom extension of a certificate, as specified in
 /// [RFC 5280](https://tools.ietf.org/html/rfc5280#section-4.2)
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct CustomExtension {
 	pub(crate) oid: Vec<u64>,
-	pub(crate) critical: bool,
+	pub(crate) criticality: Criticality,
 
 	/// The content must be DER-encoded
-	content: Vec<u8>,
+	pub(crate) content: Vec<u8>,
 }
 
 impl CustomExtension {
@@ -1051,7 +1066,7 @@ impl CustomExtension {
 		});
 		Self {
 			oid: oid::PE_ACME.to_owned(),
-			critical: true,
+			criticality: Criticality::Critical,
 			content,
 		}
 	}
@@ -1059,17 +1074,17 @@ impl CustomExtension {
 	pub fn from_oid_content(oid: &[u64], content: Vec<u8>) -> Self {
 		Self {
 			oid: oid.to_owned(),
-			critical: false,
+			criticality: Criticality::NonCritical,
 			content,
 		}
 	}
 	/// Sets the criticality flag of the extension.
 	pub fn set_criticality(&mut self, criticality: bool) {
-		self.critical = criticality;
+		self.criticality = criticality.into();
 	}
 	/// Obtains the criticality flag of the extension.
 	pub fn criticality(&self) -> bool {
-		self.critical
+		self.criticality == Criticality::Critical
 	}
 	/// Obtains the content of the extension.
 	pub fn content(&self) -> &[u8] {
@@ -1081,18 +1096,17 @@ impl CustomExtension {
 	}
 }
 
-impl<T: StaticExtension> Extension for T {
+impl Extension for &CustomExtension {
 	fn write_value(&self, writer: DERWriter) {
-		// Calling with fully qualified syntax to disambiguate.
-		StaticExtension::write_value(self, writer)
+		writer.write_der(&self.content)
 	}
 
 	fn criticality(&self) -> Criticality {
-		T::CRITICALITY
+		self.criticality
 	}
 
 	fn oid(&self) -> &[u64] {
-		T::OID
+		&self.oid
 	}
 }
 
@@ -1162,7 +1176,7 @@ pub(crate) trait Extension: Debug {
 /// See [RFC 5280 §4.2] for more information.
 ///
 /// [RFC 5280 §4.2]: <https://www.rfc-editor.org/rfc/rfc5280#section-4.2>
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Criticality {
 	/// The extension MUST be recognized and parsed correctly.
 	Critical,

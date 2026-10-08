@@ -18,10 +18,9 @@ use crate::ring_like::digest;
 #[cfg(feature = "pem")]
 use crate::ENCODE_CONFIG;
 use crate::{
-	oid, write_distinguished_name, write_dt_utc_or_generalized, write_x509_extension,
-	CrlDistributionPoint, CustomExtension, DistinguishedName, Error, ExtendedKeyUsagePurpose,
-	GeneralName, IsCa, Issuer, KeyIdMethod, KeyUsagePurpose, NameConstraints, SerialNumber,
-	SigningKey,
+	oid, write_distinguished_name, write_dt_utc_or_generalized, CrlDistributionPoint,
+	CustomExtension, DistinguishedName, Error, ExtendedKeyUsagePurpose, GeneralName, IsCa, Issuer,
+	KeyIdMethod, KeyUsagePurpose, NameConstraints, SerialNumber, SigningKey,
 };
 
 /// An issued certificate
@@ -213,10 +212,8 @@ impl CertificateParams {
 						let bc = self.is_ca;
 						bc.write(writer.next());
 					}
-					for ext in &self.custom_extensions {
-						write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-							writer.write_der(ext.content())
-						});
+					for custom_ext in &self.custom_extensions {
+						custom_ext.write(writer.next());
 					}
 				});
 			});
@@ -457,10 +454,8 @@ impl CertificateParams {
 			bc.write(writer.next());
 		}
 
-		for ext in &self.custom_extensions {
-			write_x509_extension(writer.next(), &ext.oid, ext.critical, |writer| {
-				writer.write_der(ext.content())
-			});
+		for custom_ext in &self.custom_extensions {
+			custom_ext.write(writer.next());
 		}
 
 		Ok(())
